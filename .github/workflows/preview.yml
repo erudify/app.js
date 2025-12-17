@@ -35,25 +35,28 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           PREVIEW_NAME="app-js-pr-${{ github.event.pull_request.number }}"
-          # Deploy directly with wrangler, bypassing opennextjs-cloudflare wrapper
-          nix develop --command npx wrangler deploy \
-            .open-next/worker.js \
-            --name "$PREVIEW_NAME" \
-            --no-bundle \
-            --compatibility-date "2025-12-17" \
-            --compatibility-flag "nodejs_compat" \
-            --assets ".open-next/assets" \
-            2>&1 | tee deploy.log
-          # Extract URL from wrangler output or use whoami to get workers.dev subdomain
+          
+          # Create a preview-specific wrangler config without custom domain routes
+          cat > wrangler.preview.jsonc << EOF
+          {
+            "name": "${PREVIEW_NAME}",
+            "main": ".open-next/worker.js",
+            "compatibility_date": "2025-12-17",
+            "compatibility_flags": ["nodejs_compat"],
+            "assets": {
+              "directory": ".open-next/assets",
+              "binding": "ASSETS"
+            }
+          }
+          EOF
+          
+          # Deploy using the preview config (no routes = workers.dev URL only)
+          nix develop --command npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee deploy.log
+          
+          # Extract the workers.dev URL from output
           PREVIEW_URL=$(grep -oE 'https://[^[:space:]]+\.workers\.dev' deploy.log | head -1)
           if [ -z "$PREVIEW_URL" ]; then
-            # Get subdomain from wrangler whoami
-            SUBDOMAIN=$(nix develop --command npx wrangler whoami 2>&1 | grep -oP '[\w-]+\.workers\.dev' | head -1 | sed 's/\.workers\.dev//')
-            if [ -n "$SUBDOMAIN" ]; then
-              PREVIEW_URL="https://${PREVIEW_NAME}.${SUBDOMAIN}.workers.dev"
-            else
-              PREVIEW_URL="https://${PREVIEW_NAME}.workers.dev"
-            fi
+            PREVIEW_URL="https://${PREVIEW_NAME}.workers.dev"
           fi
           echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           echo "name=$PREVIEW_NAME" >> "$GITHUB_OUTPUT"
