@@ -1,0 +1,85 @@
+name: Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Install dependencies
+        run: nix develop --command npm ci
+
+      - name: Build
+        run: nix develop --command npx opennextjs-cloudflare build
+
+      - name: Deploy preview
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          PREVIEW_NAME="app-js-pr-${{ github.event.pull_request.number }}"
+          nix develop --command npx wrangler deploy --name "$PREVIEW_NAME" --no-route 2>&1 | tee deploy.log
+          PREVIEW_URL=$(grep -oP 'https://[^\s]+\.workers\.dev' deploy.log | head -1)
+          echo "url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          echo "name=$PREVIEW_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: "Preview Deployment"
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          edit-mode: replace
+          body: |
+            ## Preview Deployment
+
+            | Status | URL |
+            |--------|-----|
+            | Deployed | ${{ steps.deploy.outputs.url }} |
+
+            Commit: ${{ github.sha }}
+
+  cleanup-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Install dependencies
+        run: nix develop --command npm ci
+
+      - name: Delete preview deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          PREVIEW_NAME="app-js-pr-${{ github.event.pull_request.number }}"
+          nix develop --command npx wrangler delete --name "$PREVIEW_NAME" --force || true
