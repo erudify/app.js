@@ -37,9 +37,9 @@ jobs:
           PREVIEW_NAME="app-js-pr-${{ github.event.pull_request.number }}"
           
           # Create a preview-specific wrangler config without custom domain routes
-          cat > wrangler.preview.jsonc << EOF
+          cat > wrangler.preview.jsonc << 'WRANGLER_EOF'
           {
-            "name": "${PREVIEW_NAME}",
+            "name": "PREVIEW_NAME_PLACEHOLDER",
             "main": ".open-next/worker.js",
             "compatibility_date": "2025-12-17",
             "compatibility_flags": ["nodejs_compat"],
@@ -48,10 +48,11 @@ jobs:
               "binding": "ASSETS"
             }
           }
-          EOF
+          WRANGLER_EOF
+          sed -i "s/PREVIEW_NAME_PLACEHOLDER/${PREVIEW_NAME}/" wrangler.preview.jsonc
           
-          # Deploy using the preview config (no routes = workers.dev URL only)
-          nix develop --command npx wrangler deploy --config wrangler.preview.jsonc 2>&1 | tee deploy.log
+          # Deploy using opennextjs-cloudflare with preview config (no routes = workers.dev URL only)
+          nix develop --command npx opennextjs-cloudflare deploy --config wrangler.preview.jsonc 2>&1 | tee deploy.log
           
           # Extract the workers.dev URL from output
           PREVIEW_URL=$(grep -oE 'https://[^[:space:]]+\.workers\.dev' deploy.log | head -1)
