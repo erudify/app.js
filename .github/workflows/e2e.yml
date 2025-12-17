@@ -17,10 +17,13 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Install dependencies
-        run: nix develop .#ci --command npm ci
+        run: nix develop --command npm ci
+
+      - name: Install Playwright browsers
+        run: nix develop --command npx playwright install chromium --with-deps
 
       - name: Run E2E tests
-        run: nix develop .#ci --command npm test
+        run: nix develop --command npm test
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

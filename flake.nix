@@ -27,20 +27,6 @@
             echo "  npm run deploy   - Deploy to Cloudflare Workers"
           '';
         };
-
-        devShells.ci = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            nodejs_22
-            nodePackages.npm
-            # Playwright dependencies for headless Chromium
-            playwright-driver.browsers
-          ];
-
-          shellHook = ''
-            export PLAYWRIGHT_BROWSERS_PATH=${pkgs.playwright-driver.browsers}
-            export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true
-          '';
-        };
       }
     );
 }
