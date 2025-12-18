@@ -7,23 +7,31 @@ test.describe("Server-Side Rendering", () => {
     await page.goto("/");
 
     // Verify the page title is rendered server-side
-    await expect(page).toHaveTitle("Create Next App");
+    await expect(page).toHaveTitle(
+      "Erudify - Learn Chinese with Spaced Repetition"
+    );
 
     // Verify main heading is present in the HTML
     await expect(
       page.getByRole("heading", {
-        name: "To get started, edit the page.tsx file.",
+        name: /Learn Chinese.*Remember Forever/,
       })
     ).toBeVisible();
 
-    // Verify links are rendered
-    await expect(page.getByRole("link", { name: "Templates" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Learning" })).toBeVisible();
+    // Verify key sections are rendered
     await expect(
-      page.getByRole("link", { name: "Documentation" })
+      page.getByRole("heading", { name: "Why Spaced Repetition?" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Ready to Start?" })
     ).toBeVisible();
 
-    // Verify images have proper alt text (important for SSR)
-    await expect(page.getByAltText("Next.js logo")).toBeVisible();
+    // Verify CTA links are rendered
+    await expect(
+      page.getByRole("link", { name: "Start Learning Free" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "How It Works" })
+    ).toBeVisible();
   });
 });
