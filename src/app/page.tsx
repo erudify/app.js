@@ -8,10 +8,10 @@ export default function Home() {
             Erudify
           </span>
           <a
-            href="#get-started"
+            href="/read"
             className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
           >
-            Get Started
+            Start Studying
           </a>
         </nav>
       </header>
@@ -31,7 +31,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <a
-              href="#get-started"
+              href="/read"
               className="rounded-full bg-red-600 px-8 py-3 text-lg font-medium text-white transition-colors hover:bg-red-700"
             >
               Start Learning Free
@@ -97,10 +97,10 @@ export default function Home() {
             Erudify.
           </p>
           <a
-            href="#"
+            href="/read"
             className="inline-block rounded-full bg-red-600 px-8 py-3 text-lg font-medium text-white transition-colors hover:bg-red-700"
           >
-            Create Free Account
+            Start Studying Now
           </a>
         </section>
       </main>
