@@ -79,48 +79,65 @@ function parseExercises(yaml: string): Exercise[] {
   const lines = yaml.split("\n");
 
   let currentExercise: Exercise | null = null;
-  let currentSegment: { chinese?: string; pinyin?: string } | null = null;
+  let currentSegment: { chinese?: string; pinyin?: string; transliteration?: string } | null = null;
 
   for (const line of lines) {
     const trimmed = line.trim();
 
-    if (trimmed === "- segments:") {
+    if (trimmed.startsWith("- english:")) {
       // Start new exercise
       if (currentExercise) {
+        // Add the last segment of the previous exercise if it exists
+        if (currentSegment && currentSegment.chinese) {
+          currentExercise.segments.push({
+            chinese: currentSegment.chinese,
+            pinyin: currentSegment.pinyin || "",
+            transliteration: currentSegment.transliteration,
+          });
+          currentSegment = null;
+        }
         exercises.push(currentExercise);
       }
-      currentExercise = { segments: [], english: "" };
+      currentExercise = { segments: [], english: trimmed.slice(10).trim() };
       currentSegment = null;
+    } else if (trimmed === "chunks:") {
+      // Just a marker
     } else if (trimmed.startsWith("- chinese:")) {
       // Start new segment
       if (currentSegment && currentSegment.chinese && currentExercise) {
         currentExercise.segments.push({
           chinese: currentSegment.chinese,
           pinyin: currentSegment.pinyin || "",
+          transliteration: currentSegment.transliteration,
         });
       }
       currentSegment = { chinese: trimmed.slice(10).trim() };
     } else if (trimmed.startsWith("pinyin:")) {
       // Add pinyin to current segment
       if (currentSegment) {
-        currentSegment.pinyin = trimmed.slice(7).trim().replace(/'/g, "");
+        let p = trimmed.slice(7).trim().replace(/'/g, "");
+        // If it's punctuation, set to empty string to avoid requiring input for it
+        if (/^[.,!?;:，。？！：、]$/.test(p)) {
+          p = "";
+        }
+        currentSegment.pinyin = p;
       }
-    } else if (trimmed.startsWith("english:")) {
-      // Add English translation
-      if (currentSegment && currentSegment.chinese && currentExercise) {
-        currentExercise.segments.push({
-          chinese: currentSegment.chinese,
-          pinyin: currentSegment.pinyin || "",
-        });
-        currentSegment = null;
-      }
-      if (currentExercise) {
-        currentExercise.english = trimmed.slice(8).trim();
+    } else if (trimmed.startsWith("transliteration:")) {
+      // Add transliteration to current segment
+      if (currentSegment) {
+        currentSegment.transliteration = trimmed.slice(16).trim().replace(/'/g, "");
       }
     }
   }
 
-  // Don't forget the last exercise
+  // Add the last segment and exercise
+  if (currentExercise && currentSegment && currentSegment.chinese) {
+    currentExercise.segments.push({
+      chinese: currentSegment.chinese,
+      pinyin: currentSegment.pinyin || "",
+      transliteration: currentSegment.transliteration,
+    });
+  }
   if (currentExercise) {
     exercises.push(currentExercise);
   }
@@ -169,6 +186,7 @@ function formatDate(timestamp: number): string {
 
 export default function ReadPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [orderedWordList, setOrderedWordList] = useState<string[]>([]);
   const [progress, setProgress] = useState<StudentProgress>(() => loadProgress());
   const [displayedExerciseIndex, setDisplayedExerciseIndex] = useState<number | null>(null);
   const [currentInputIndex, setCurrentInputIndex] = useState(0);
@@ -177,21 +195,29 @@ export default function ReadPage() {
   const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load exercises on mount
+  // Load exercises and word list on mount
   useEffect(() => {
-    async function loadExercises() {
+    async function loadData() {
       try {
-        const response = await fetch("/exercises_1.yaml");
-        const yamlText = await response.text();
+        const [exRes, wordRes] = await Promise.all([
+          fetch("/HSK-1.yml"),
+          fetch("/HSK 1.txt")
+        ]);
 
-        const parsed = parseExercises(yamlText);
-        setExercises(parsed);
+        const yamlText = await exRes.text();
+        const wordText = await wordRes.text();
+
+        const parsedEx = parseExercises(yamlText);
+        const parsedWords = wordText.split("\n").map(w => w.trim()).filter(w => w !== "" && !w.startsWith("#"));
+
+        setExercises(parsedEx);
+        setOrderedWordList(parsedWords);
       } catch (error) {
-        console.error("Failed to load exercises:", error);
+        console.error("Failed to load data:", error);
       }
     }
 
-    loadExercises();
+    loadData();
   }, []);
 
   // Calculate the next exercise recommendation
@@ -199,8 +225,8 @@ export default function ReadPage() {
     if (exercises.length === 0) {
       return null;
     }
-    return selectNextExercise(exercises, progress);
-  }, [exercises, progress]);
+    return selectNextExercise(exercises, progress, orderedWordList);
+  }, [exercises, progress, orderedWordList]);
 
   // Set initial exercise when exercises load
   useEffect(() => {
@@ -234,7 +260,7 @@ export default function ReadPage() {
 
   // Move to next exercise (pass the updated progress to get correct next exercise)
   const advanceToNextExercise = useCallback((updatedProgress: StudentProgress) => {
-    const next = selectNextExercise(exercises, updatedProgress);
+    const next = selectNextExercise(exercises, updatedProgress, orderedWordList);
     if (next) {
       setDisplayedExerciseIndex(next.index);
     }
@@ -242,7 +268,7 @@ export default function ReadPage() {
     setInputValue("");
     setShowHint(false);
     setHintedWordIndices(new Set());
-  }, [exercises]);
+  }, [exercises, orderedWordList]);
 
   // Check if input matches and advance to next segment
   const checkAndAdvance = useCallback(
@@ -269,7 +295,7 @@ export default function ReadPage() {
             for (let i = 0; i < words.length; i++) {
               const word = words[i];
               const pinyin = getPinyinForWord(currentExercise, word);
-              
+
               if (hintedWordIndices.has(i)) {
                 // Hint was used for this word - mark as failure
                 const result = updateWordFailure(word, pinyin, newProgress, completedAt);
@@ -558,14 +584,14 @@ export default function ReadPage() {
                         autoFocus
                       />
                     ) : isCompleted ? (
-                      <span 
+                      <span
                         className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
                         style={{ width: pinyinWidth }}
                       >
                         {segment.pinyin}
                       </span>
                     ) : (
-                      <span 
+                      <span
                         className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
                         style={{ width: pinyinWidth }}
                       >

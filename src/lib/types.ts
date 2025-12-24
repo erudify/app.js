@@ -4,6 +4,7 @@
 export interface ExerciseSegment {
   chinese: string;
   pinyin: string;
+  transliteration?: string;
 }
 
 /**

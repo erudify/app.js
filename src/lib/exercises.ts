@@ -35,7 +35,8 @@ export function getNewWords(
  */
 export function selectNextExercise(
   exercises: Exercise[],
-  progress: StudentProgress
+  progress: StudentProgress,
+  orderedWordList: string[] = []
 ): { exercise: Exercise; index: number; targetWord?: string } | null {
   const now = Date.now();
 
@@ -54,8 +55,9 @@ export function selectNextExercise(
       .filter(({ exercise }) => exerciseContainsWord(exercise, targetWord));
 
     if (candidateExercises.length === 0) {
-      // This shouldn't happen, but handle it gracefully
-      return selectNewExercise(exercises, progress);
+      // This word is in progress but no exercises contain it?
+      // Fall back to new words or next in list
+      return selectNewExercise(exercises, progress, orderedWordList);
     }
 
     // Score each exercise based on priorities
@@ -96,8 +98,8 @@ export function selectNextExercise(
     };
   }
 
-  // No words need review - pick a new exercise with new words
-  return selectNewExercise(exercises, progress);
+  // No words need review - pick the next word in the HSK list that isn't mastered
+  return selectNewExercise(exercises, progress, orderedWordList);
 }
 
 /**
@@ -105,28 +107,42 @@ export function selectNextExercise(
  */
 function selectNewExercise(
   exercises: Exercise[],
-  progress: StudentProgress
-): { exercise: Exercise; index: number } | null {
-  // Find the first exercise that contains at least one new word
+  progress: StudentProgress,
+  orderedWordList: string[]
+): { exercise: Exercise; index: number; targetWord?: string } | null {
+  // If we have an ordered word list, pick the first word that isn't in progress
+  if (orderedWordList.length > 0) {
+    for (const word of orderedWordList) {
+      if (!progress.words[word]) {
+        // Find an exercise that contains this word
+        const candidates = exercises
+          .map((ex, idx) => ({ exercise: ex, index: idx }))
+          .filter(({ exercise }) => exerciseContainsWord(exercise, word));
+
+        if (candidates.length > 0) {
+          // Just pick the first candidate for now
+          // We could score these as well, but first unseen is usually fine
+          const firstUnseen = candidates.find(c => !progress.seenExercises.has(c.index));
+          const result = firstUnseen || candidates[0];
+          return { ...result, targetWord: word };
+        }
+      }
+    }
+  }
+
+  // Fallback to old logic if no word list or all words in list are started
   for (let i = 0; i < exercises.length; i++) {
     const exercise = exercises[i];
     const newWords = getNewWords(exercise, progress);
 
     if (newWords.length > 0) {
-      return { exercise, index: i };
+      return { exercise, index: i, targetWord: newWords[0] };
     }
   }
 
-  // All exercises have been seen with all words known
-  // Just pick the first unseen exercise, or cycle back to the beginning
-  for (let i = 0; i < exercises.length; i++) {
-    if (!progress.seenExercises.has(i)) {
-      return { exercise: exercises[i], index: i };
-    }
-  }
-
-  // Everything has been seen - start from the beginning
-  return exercises.length > 0 ? { exercise: exercises[0], index: 0 } : null;
+  // Everything has been seen - start from the beginning or pick earliest review
+  if (exercises.length === 0) return null;
+  return { exercise: exercises[0], index: 0 };
 }
 
 /**
