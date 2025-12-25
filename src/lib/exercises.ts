@@ -103,8 +103,8 @@ export function getExerciseCandidates(
         // New word: high score to avoid introducing too many at once
         wordScore = 5;
       } else if (wp.nextReview <= now) {
-        // Due for review: small score
-        wordScore = 1;
+        // Due for review: treating as safe context (0 score)
+        wordScore = 0;
       }
       wordScores[w] = wordScore;
       totalWordScore += wordScore;
