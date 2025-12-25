@@ -35,24 +35,32 @@ const STORAGE_KEY = "erudify-progress";
  */
 function loadProgress(): StudentProgress {
   if (typeof window === "undefined") {
-    return { words: {}, history: [], seenExercises: new Set() };
+    return { words: {}, history: [], exerciseLastSeen: {} };
   }
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      // Migration: Convert seenExercises Set array to exerciseLastSeen map
+      const exerciseLastSeen = parsed.exerciseLastSeen || {};
+      if (parsed.seenExercises) {
+        parsed.seenExercises.forEach((idx: number) => {
+          if (!exerciseLastSeen[idx]) exerciseLastSeen[idx] = 1; // Default old seen entries
+        });
+      }
+
       return {
         words: parsed.words || {},
         history: parsed.history || [],
-        seenExercises: new Set(parsed.seenExercises || []),
+        exerciseLastSeen: exerciseLastSeen,
       };
     }
   } catch (error) {
     console.error("Failed to load progress:", error);
   }
 
-  return { words: {}, history: [], seenExercises: new Set() };
+  return { words: {}, history: [], exerciseLastSeen: {} };
 }
 
 /**
@@ -65,7 +73,7 @@ function saveProgress(progress: StudentProgress): void {
     const toStore = {
       words: progress.words,
       history: progress.history,
-      seenExercises: Array.from(progress.seenExercises),
+      exerciseLastSeen: progress.exerciseLastSeen,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
   } catch (error) {
@@ -421,7 +429,7 @@ export default function ReadPage() {
       const emptyProgress: StudentProgress = {
         words: {},
         history: [],
-        seenExercises: new Set(),
+        exerciseLastSeen: {},
       };
       setProgress(emptyProgress);
       saveProgress(emptyProgress);
@@ -505,7 +513,7 @@ export default function ReadPage() {
             </div>
           </div>
           <div className="mt-2 text-xs text-zinc-500">
-            Exercises: {progress.seenExercises.size}
+            Exercises: {Object.keys(progress.exerciseLastSeen).length}
           </div>
         </div>
 
@@ -729,8 +737,8 @@ export default function ReadPage() {
                   <div
                     key={cand.index}
                     className={`rounded-xl border p-4 ${cand.index === currentIndex
-                        ? "border-red-500 bg-red-50/50 dark:border-red-900 dark:bg-red-900/20"
-                        : "border-zinc-200 dark:border-zinc-800"
+                      ? "border-red-500 bg-red-50/50 dark:border-red-900 dark:bg-red-900/20"
+                      : "border-zinc-200 dark:border-zinc-800"
                       }`}
                   >
                     <div className="mb-2 flex items-center justify-between">
@@ -746,14 +754,13 @@ export default function ReadPage() {
                       <div className="text-sm text-zinc-500">{cand.exercise.english}</div>
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
-                      <span className={`rounded-full px-2 py-0.5 ${cand.breakdown.hasNewWords ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
-                        {cand.breakdown.hasNewWords ? "Has New Words (-1000)" : "No New Words (+1000)"}
-                      </span>
+                      {Object.entries(cand.breakdown.wordScores).map(([word, score]) => (
+                        <span key={word} className={`rounded-full px-2 py-0.5 ${score > 0 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
+                          {word}: {score}
+                        </span>
+                      ))}
                       <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                        Future review words: {cand.breakdown.futureReviewWordsCount} (×100)
-                      </span>
-                      <span className={`rounded-full px-2 py-0.5 ${cand.breakdown.isUnseen ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}`}>
-                        {cand.breakdown.isUnseen ? "Unseen (+10)" : "Seen (+0)"}
+                        Last seen: {cand.breakdown.lastSeen === 0 ? "Never" : new Date(cand.breakdown.lastSeen).toLocaleTimeString()}
                       </span>
                     </div>
                   </div>
