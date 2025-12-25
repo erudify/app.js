@@ -1,5 +1,16 @@
 import type { Exercise, StudentProgress, WordIntervalChange } from "./types";
 
+export interface ScoredExercise {
+  exercise: Exercise;
+  index: number;
+  score: number;
+  breakdown: {
+    hasNewWords: boolean;
+    futureReviewWordsCount: number;
+    isUnseen: boolean;
+  };
+}
+
 const INITIAL_INTERVAL = 30; // 30 seconds
 const INTERVAL_MULTIPLIER = 5;
 const EARLY_REVIEW_MULTIPLIER = 1.05; // For words reviewed before their scheduled time
@@ -49,47 +60,14 @@ export function selectNextExercise(
     // We have words to review - pick the most urgent one
     const targetWord = wordsNeedingReview[0].word;
 
-    // Filter exercises that contain the target word
-    const candidateExercises = exercises
-      .map((ex, idx) => ({ exercise: ex, index: idx }))
-      .filter(({ exercise }) => exerciseContainsWord(exercise, targetWord));
+    // Use the new helper to score candidates
+    const scoredExercises = getExerciseCandidates(targetWord, exercises, progress);
 
-    if (candidateExercises.length === 0) {
+    if (scoredExercises.length === 0) {
       // This word is in progress but no exercises contain it?
       // Fall back to new words or next in list
       return selectNewExercise(exercises, progress, orderedWordList);
     }
-
-    // Score each exercise based on priorities
-    const scoredExercises = candidateExercises.map(({ exercise, index }) => {
-      let score = 0;
-
-      const newWords = getNewWords(exercise, progress);
-      const hasNewWords = newWords.length > 0;
-      const exerciseWords = getExerciseWords(exercise);
-
-      // Priority 1: Prefer exercises with no new words (high priority)
-      if (!hasNewWords) {
-        score += 1000;
-      }
-
-      // Priority 2: Prefer exercises with words that have future review dates
-      const futureReviewWords = exerciseWords.filter((word) => {
-        const wp = progress.words[word];
-        return wp && wp.nextReview > now;
-      });
-      score += futureReviewWords.length * 100;
-
-      // Priority 3: Prefer exercises not seen before
-      if (!progress.seenExercises.has(index)) {
-        score += 10;
-      }
-
-      return { exercise, index, score };
-    });
-
-    // Sort by score (highest first)
-    scoredExercises.sort((a, b) => b.score - a.score);
 
     return {
       exercise: scoredExercises[0].exercise,
@@ -100,6 +78,54 @@ export function selectNextExercise(
 
   // No words need review - pick the next word in the HSK list that isn't mastered
   return selectNewExercise(exercises, progress, orderedWordList);
+}
+
+/**
+ * Get all candidate exercises for a word, ranked by score
+ */
+export function getExerciseCandidates(
+  word: string,
+  exercises: Exercise[],
+  progress: StudentProgress
+): ScoredExercise[] {
+  const now = Date.now();
+
+  const candidateExercises = exercises
+    .map((ex, idx) => ({ exercise: ex, index: idx }))
+    .filter(({ exercise }) => exerciseContainsWord(exercise, word));
+
+  const scored = candidateExercises.map(({ exercise, index }) => {
+    let score = 0;
+
+    const newWords = getNewWords(exercise, progress);
+    const hasNewWords = newWords.length > 0;
+    const exerciseWords = getExerciseWords(exercise);
+
+    // Score calculations
+    if (!hasNewWords) score += 1000;
+
+    const futureReviewWordsCount = exerciseWords.filter((w) => {
+      const wp = progress.words[w];
+      return wp && wp.nextReview > now;
+    }).length;
+    score += futureReviewWordsCount * 100;
+
+    const isUnseen = !progress.seenExercises.has(index);
+    if (isUnseen) score += 10;
+
+    return {
+      exercise,
+      index,
+      score,
+      breakdown: {
+        hasNewWords,
+        futureReviewWordsCount,
+        isUnseen,
+      },
+    };
+  });
+
+  return scored.sort((a, b) => b.score - a.score);
 }
 
 /**
