@@ -98,8 +98,14 @@ export function getExerciseCandidates(
 
     for (const w of exerciseWords) {
       const wp = progress.words[w];
-      // Score: 1 for missing review date or review date in the past
-      const wordScore = (!wp || wp.nextReview <= now) ? 1 : 0;
+      let wordScore = 0;
+      if (!wp) {
+        // New word: high score to avoid introducing too many at once
+        wordScore = 5;
+      } else if (wp.nextReview <= now) {
+        // Due for review: small score
+        wordScore = 1;
+      }
       wordScores[w] = wordScore;
       totalWordScore += wordScore;
     }
