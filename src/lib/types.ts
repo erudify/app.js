@@ -58,5 +58,5 @@ export interface ExerciseHistory {
 export interface StudentProgress {
   words: Record<string, WordProgress>; // keyed by word
   history: ExerciseHistory[];
-  seenExercises: Set<number>; // indices of exercises already seen
+  exerciseLastSeen: Record<number, number>; // exercise index -> timestamp
 }

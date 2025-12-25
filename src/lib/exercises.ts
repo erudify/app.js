@@ -5,9 +5,9 @@ export interface ScoredExercise {
   index: number;
   score: number;
   breakdown: {
-    hasNewWords: boolean;
-    futureReviewWordsCount: number;
-    isUnseen: boolean;
+    wordScores: Record<string, number>;
+    totalWordScore: number;
+    lastSeen: number;
   };
 }
 
@@ -80,9 +80,6 @@ export function selectNextExercise(
   return selectNewExercise(exercises, progress, orderedWordList);
 }
 
-/**
- * Get all candidate exercises for a word, ranked by score
- */
 export function getExerciseCandidates(
   word: string,
   exercises: Exercise[],
@@ -95,37 +92,39 @@ export function getExerciseCandidates(
     .filter(({ exercise }) => exerciseContainsWord(exercise, word));
 
   const scored = candidateExercises.map(({ exercise, index }) => {
-    let score = 0;
-
-    const newWords = getNewWords(exercise, progress);
-    const hasNewWords = newWords.length > 0;
     const exerciseWords = getExerciseWords(exercise);
+    const wordScores: Record<string, number> = {};
+    let totalWordScore = 0;
 
-    // Score calculations
-    if (!hasNewWords) score += 1000;
-
-    const futureReviewWordsCount = exerciseWords.filter((w) => {
+    for (const w of exerciseWords) {
       const wp = progress.words[w];
-      return wp && wp.nextReview > now;
-    }).length;
-    score += futureReviewWordsCount * 100;
+      // Score: 1 for missing review date or review date in the past
+      const wordScore = (!wp || wp.nextReview <= now) ? 1 : 0;
+      wordScores[w] = wordScore;
+      totalWordScore += wordScore;
+    }
 
-    const isUnseen = !progress.seenExercises.has(index);
-    if (isUnseen) score += 10;
+    const lastSeen = progress.exerciseLastSeen[index] || 0;
 
     return {
       exercise,
       index,
-      score,
+      score: totalWordScore,
       breakdown: {
-        hasNewWords,
-        futureReviewWordsCount,
-        isUnseen,
+        wordScores,
+        totalWordScore,
+        lastSeen,
       },
     };
   });
 
-  return scored.sort((a, b) => b.score - a.score);
+  // Sort by word score (lowest first), then by last seen date (oldest/never first)
+  return scored.sort((a, b) => {
+    if (a.score !== b.score) {
+      return a.score - b.score;
+    }
+    return a.breakdown.lastSeen - b.breakdown.lastSeen;
+  });
 }
 
 /**
@@ -141,16 +140,14 @@ function selectNewExercise(
     for (const word of orderedWordList) {
       if (!progress.words[word]) {
         // Find an exercise that contains this word
-        const candidates = exercises
-          .map((ex, idx) => ({ exercise: ex, index: idx }))
-          .filter(({ exercise }) => exerciseContainsWord(exercise, word));
+        const candidates = getExerciseCandidates(word, exercises, progress);
 
         if (candidates.length > 0) {
-          // Just pick the first candidate for now
-          // We could score these as well, but first unseen is usually fine
-          const firstUnseen = candidates.find(c => !progress.seenExercises.has(c.index));
-          const result = firstUnseen || candidates[0];
-          return { ...result, targetWord: word };
+          return {
+            exercise: candidates[0].exercise,
+            index: candidates[0].index,
+            targetWord: word
+          };
         }
       }
     }
@@ -162,7 +159,15 @@ function selectNewExercise(
     const newWords = getNewWords(exercise, progress);
 
     if (newWords.length > 0) {
-      return { exercise, index: i, targetWord: newWords[0] };
+      // Re-score using the new logic to find the best candidate for this new word
+      const candidates = getExerciseCandidates(newWords[0], exercises, progress);
+      if (candidates.length > 0) {
+        return {
+          exercise: candidates[0].exercise,
+          index: candidates[0].index,
+          targetWord: newWords[0]
+        };
+      }
     }
   }
 
@@ -287,8 +292,9 @@ export function addExerciseToHistory(
   wordChanges: WordIntervalChange[],
   progress: StudentProgress
 ): StudentProgress {
-  const newSeenExercises = new Set(progress.seenExercises);
-  newSeenExercises.add(exerciseIndex);
+  const newLastSeen = { ...progress.exerciseLastSeen };
+  const completedAt = Date.now();
+  newLastSeen[exerciseIndex] = completedAt;
 
   const chinese = exercise.segments.map((s) => s.chinese).join("");
   const pinyin = exercise.segments
@@ -302,7 +308,7 @@ export function addExerciseToHistory(
       ...progress.history,
       {
         exerciseIndex,
-        completedAt: Date.now(),
+        completedAt,
         success,
         chinese,
         pinyin,
@@ -310,7 +316,7 @@ export function addExerciseToHistory(
         wordChanges,
       },
     ],
-    seenExercises: newSeenExercises,
+    exerciseLastSeen: newLastSeen,
   };
 }
 
