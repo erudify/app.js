@@ -133,6 +133,7 @@ export function getExerciseCandidates(
   });
 }
 
+
 /**
  * Select a new exercise (one that introduces new words)
  */
