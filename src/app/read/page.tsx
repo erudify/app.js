@@ -23,6 +23,8 @@ import {
   addExerciseToHistory,
   getExerciseWords,
   getPinyinForWord,
+  getExerciseCandidates,
+  ScoredExercise,
 } from "@/lib/exercises";
 import { processPinyinInput } from "@/lib/pinyin";
 
@@ -193,6 +195,7 @@ export default function ReadPage() {
   const [inputValue, setInputValue] = useState("");
   const [showHint, setShowHint] = useState(false);
   const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
+  const [showDebug, setShowDebug] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Load exercises and word list on mount
@@ -259,6 +262,12 @@ export default function ReadPage() {
   const currentExercise = displayedExerciseIndex !== null ? exercises[displayedExerciseIndex] : null;
   const currentIndex = displayedExerciseIndex ?? -1;
   const targetWord = nextExerciseData?.index === displayedExerciseIndex ? nextExerciseData.targetWord : undefined;
+
+  // Calculate debug candidates if targetWord is present
+  const debugCandidates = useMemo(() => {
+    if (!targetWord || !showDebug) return [];
+    return getExerciseCandidates(targetWord, exercises, progress);
+  }, [targetWord, showDebug, exercises, progress]);
 
   // Save progress whenever it changes
   useEffect(() => {
@@ -578,8 +587,36 @@ export default function ReadPage() {
           {/* Current exercise */}
           <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
             {targetWord && (
-              <div className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-                Reviewing: <span className="font-medium">{targetWord}</span>
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Reviewing: <span className="font-medium">{targetWord}</span>
+                </div>
+                <button
+                  onClick={() => setShowDebug(true)}
+                  className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                  title="Debug exercise selection"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m8 2 1.88 1.88" />
+                    <path d="M14.12 3.88 16 2" />
+                    <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
+                    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+                    <path d="M12 20v-9" />
+                    <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+                    <path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4" />
+                    <path d="M8.5 13h7" />
+                  </svg>
+                </button>
               </div>
             )}
 
@@ -670,6 +707,70 @@ export default function ReadPage() {
           </div>
         </div>
       </main>
+
+      {/* Debug Modal */}
+      {showDebug && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-zinc-200 p-6 dark:border-zinc-800">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+                Exercise Selection Debug: {targetWord}
+              </h3>
+              <button
+                onClick={() => setShowDebug(false)}
+                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-4">
+                {debugCandidates.map((cand) => (
+                  <div
+                    key={cand.index}
+                    className={`rounded-xl border p-4 ${cand.index === currentIndex
+                        ? "border-red-500 bg-red-50/50 dark:border-red-900 dark:bg-red-900/20"
+                        : "border-zinc-200 dark:border-zinc-800"
+                      }`}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-bold text-zinc-900 dark:text-white">
+                        Option #{cand.index} {cand.index === currentIndex && " (Selected)"}
+                      </span>
+                      <span className="rounded bg-zinc-100 px-2 py-0.5 text-sm font-mono font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        Score: {cand.score}
+                      </span>
+                    </div>
+                    <div className="mb-3">
+                      <div className="text-lg text-zinc-900 dark:text-white">{cand.exercise.segments.map(s => s.chinese).join("")}</div>
+                      <div className="text-sm text-zinc-500">{cand.exercise.english}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className={`rounded-full px-2 py-0.5 ${cand.breakdown.hasNewWords ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
+                        {cand.breakdown.hasNewWords ? "Has New Words (-1000)" : "No New Words (+1000)"}
+                      </span>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        Future review words: {cand.breakdown.futureReviewWordsCount} (×100)
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 ${cand.breakdown.isUnseen ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}`}>
+                        {cand.breakdown.isUnseen ? "Unseen (+10)" : "Seen (+0)"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-zinc-200 p-6 dark:border-zinc-800">
+              <button
+                onClick={() => setShowDebug(false)}
+                className="w-full rounded-xl bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
