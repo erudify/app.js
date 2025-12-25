@@ -220,6 +220,26 @@ export default function ReadPage() {
     loadData();
   }, []);
 
+  // Calculate progress stats
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const wordEntries = Object.values(progress.words);
+
+    const knownCount = wordEntries.filter((w) => w.nextReview > now).length;
+    const reviewCount = wordEntries.filter((w) => w.nextReview <= now).length;
+
+    // Words left in course:
+    // We need to know which words in orderedWordList are NOT in progress.words
+    const progressWordsSet = new Set(Object.keys(progress.words));
+    const leftCount = orderedWordList.filter((word) => !progressWordsSet.has(word)).length;
+
+    return {
+      known: knownCount,
+      review: reviewCount,
+      left: leftCount,
+    };
+  }, [progress, orderedWordList]);
+
   // Calculate the next exercise recommendation
   const nextExerciseData = useMemo(() => {
     if (exercises.length === 0) {
@@ -455,9 +475,28 @@ export default function ReadPage() {
           <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Progress
           </h3>
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            <div>Words: {Object.keys(progress.words).length}</div>
-            <div>Exercises: {progress.seenExercises.size}</div>
+          <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <div className="flex justify-between">
+              <span>Known words:</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {stats.known}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Review words:</span>
+              <span className="font-medium text-red-600 dark:text-red-400">
+                {stats.review}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Words left:</span>
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {stats.left}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-zinc-500">
+            Exercises: {progress.seenExercises.size}
           </div>
         </div>
 
