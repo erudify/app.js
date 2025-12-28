@@ -610,39 +610,34 @@ export default function ReadPage() {
         <div className="mx-auto max-w-4xl">
           {/* Current exercise */}
           <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
-            {targetWord && (
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Reviewing: <span className="font-medium">{targetWord}</span>
-                </div>
-                <button
-                  onClick={() => setShowDebug(true)}
-                  className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                  title="Debug exercise selection"
+            <div className="mb-4 flex items-center justify-end">
+              <button
+                onClick={() => setShowDebug(true)}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                title="Debug exercise selection"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m8 2 1.88 1.88" />
-                    <path d="M14.12 3.88 16 2" />
-                    <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
-                    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
-                    <path d="M12 20v-9" />
-                    <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
-                    <path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4" />
-                    <path d="M8.5 13h7" />
-                  </svg>
-                </button>
-              </div>
-            )}
+                  <path d="m8 2 1.88 1.88" />
+                  <path d="M14.12 3.88 16 2" />
+                  <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
+                  <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+                  <path d="M12 20v-9" />
+                  <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+                  <path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4" />
+                  <path d="M8.5 13h7" />
+                </svg>
+              </button>
+            </div>
 
             {showCompletion ? (
               <div className="space-y-6">
@@ -651,6 +646,7 @@ export default function ReadPage() {
                     if (segment.pinyin === "") {
                       return (
                         <div key={idx} className="flex flex-col items-center gap-1">
+                          <span className="h-4 text-sm leading-4 text-transparent">.</span>
                           <span className="text-zinc-900 dark:text-white">
                             {segment.chinese}
                           </span>
@@ -662,11 +658,9 @@ export default function ReadPage() {
 
                     return (
                       <div key={idx} className="flex flex-col items-center gap-1">
-                        {segment.transliteration && (
-                          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                            {segment.transliteration}
-                          </span>
-                        )}
+                        <span className="h-4 text-sm leading-4 text-zinc-500 dark:text-zinc-400">
+                          {segment.transliteration ?? ""}
+                        </span>
                         <span className="text-zinc-900 dark:text-white">
                           {segment.chinese}
                         </span>
@@ -701,6 +695,7 @@ export default function ReadPage() {
                   if (segment.pinyin === "") {
                     return (
                       <div key={idx} className="flex flex-col items-center gap-1">
+                        <span className="h-4 text-sm leading-4 text-transparent">.</span>
                         <span className="text-zinc-900 dark:text-white">
                           {segment.chinese}
                         </span>
@@ -718,6 +713,7 @@ export default function ReadPage() {
 
                   return (
                     <div key={idx} className="flex flex-col items-center gap-1">
+                      <span className="h-4 text-sm leading-4 text-transparent">.</span>
                       <span className="text-zinc-900 dark:text-white">
                         {segment.chinese}
                       </span>
