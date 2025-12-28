@@ -204,7 +204,9 @@ export default function ReadPage() {
   const [showHint, setShowHint] = useState(false);
   const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
   const [showDebug, setShowDebug] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
 
   // Load exercises and word list on mount
   useEffect(() => {
@@ -284,8 +286,17 @@ export default function ReadPage() {
 
   // Focus input when currentInputIndex changes
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [currentInputIndex]);
+    if (!showCompletion) {
+      inputRef.current?.focus();
+    }
+  }, [currentInputIndex, showCompletion]);
+
+  // Focus continue button when completion screen appears
+  useEffect(() => {
+    if (showCompletion) {
+      continueButtonRef.current?.focus();
+    }
+  }, [showCompletion]);
 
   // Get segments that need pinyin input (non-empty pinyin)
   const inputSegments = useMemo(() => {
@@ -357,8 +368,8 @@ export default function ReadPage() {
 
             setProgress(newProgress);
 
-            // Immediately advance to next exercise with updated progress
-            advanceToNextExercise(newProgress);
+            setInputValue("");
+            setShowCompletion(true);
           }
         }
       }
@@ -413,6 +424,11 @@ export default function ReadPage() {
     },
     [checkAndAdvance]
   );
+
+  const handleContinue = useCallback(() => {
+    setShowCompletion(false);
+    advanceToNextExercise(progress);
+  }, [advanceToNextExercise, progress]);
 
   /**
    * Get recent history (last 3 exercises)
@@ -628,64 +644,115 @@ export default function ReadPage() {
               </div>
             )}
 
-            {/* Chinese sentence with input fields */}
-            <div className="flex flex-wrap items-start gap-2 text-4xl">
-              {currentExercise.segments.map((segment, idx) => {
-                // Punctuation or empty pinyin
-                if (segment.pinyin === "") {
+            {showCompletion ? (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
+                  {currentExercise.segments.map((segment, idx) => {
+                    if (segment.pinyin === "") {
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-1">
+                          <span className="text-zinc-900 dark:text-white">
+                            {segment.chinese}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
+
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        {segment.transliteration && (
+                          <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                            {segment.transliteration}
+                          </span>
+                        )}
+                        <span className="text-zinc-900 dark:text-white">
+                          {segment.chinese}
+                        </span>
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
+                          style={{ width: pinyinWidth }}
+                        >
+                          {segment.pinyin}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-4 text-lg text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+                  {currentExercise.english}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    ref={continueButtonRef}
+                    type="button"
+                    onClick={handleContinue}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
+                {currentExercise.segments.map((segment, idx) => {
+                  // Punctuation or empty pinyin
+                  if (segment.pinyin === "") {
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        <span className="text-zinc-900 dark:text-white">
+                          {segment.chinese}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const segmentInputIndex = inputSegmentIndex;
+                  inputSegmentIndex++;
+
+                  const isCurrentInput = segmentInputIndex === currentInputIndex;
+                  const isCompleted = segmentInputIndex < currentInputIndex;
+
+                  const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
+
                   return (
                     <div key={idx} className="flex flex-col items-center gap-1">
                       <span className="text-zinc-900 dark:text-white">
                         {segment.chinese}
                       </span>
+                      {isCurrentInput ? (
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={inputValue}
+                          onChange={handleChange}
+                          onKeyDown={handleKeyDown}
+                          placeholder={showHint ? segment.pinyin : ""}
+                          style={{ width: pinyinWidth }}
+                          className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
+                          autoFocus
+                        />
+                      ) : isCompleted ? (
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
+                          style={{ width: pinyinWidth }}
+                        >
+                          {segment.pinyin}
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
+                          style={{ width: pinyinWidth }}
+                        >
+                          ___
+                        </span>
+                      )}
                     </div>
                   );
-                }
-
-                const segmentInputIndex = inputSegmentIndex;
-                inputSegmentIndex++;
-
-                const isCurrentInput = segmentInputIndex === currentInputIndex;
-                const isCompleted = segmentInputIndex < currentInputIndex;
-
-                const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
-
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-1">
-                    <span className="text-zinc-900 dark:text-white">
-                      {segment.chinese}
-                    </span>
-                    {isCurrentInput ? (
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={inputValue}
-                        onChange={handleChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder={showHint ? segment.pinyin : ""}
-                        style={{ width: pinyinWidth }}
-                        className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
-                        autoFocus
-                      />
-                    ) : isCompleted ? (
-                      <span
-                        className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
-                        style={{ width: pinyinWidth }}
-                      >
-                        {segment.pinyin}
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
-                        style={{ width: pinyinWidth }}
-                      >
-                        ___
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
           {/* Instructions */}
