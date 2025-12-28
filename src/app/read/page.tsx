@@ -205,6 +205,7 @@ export default function ReadPage() {
   const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
   const [showDebug, setShowDebug] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const [activeTargetWord, setActiveTargetWord] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -273,11 +274,17 @@ export default function ReadPage() {
   const currentIndex = displayedExerciseIndex ?? -1;
   const targetWord = nextExerciseData?.index === displayedExerciseIndex ? nextExerciseData.targetWord : undefined;
 
+  useEffect(() => {
+    if (targetWord) {
+      setActiveTargetWord(targetWord);
+    }
+  }, [targetWord]);
+
   // Calculate debug candidates if targetWord is present
   const debugCandidates = useMemo(() => {
-    if (!targetWord || !showDebug) return [];
-    return getExerciseCandidates(targetWord, exercises, progress);
-  }, [targetWord, showDebug, exercises, progress]);
+    if (!activeTargetWord || !showDebug) return [];
+    return getExerciseCandidates(activeTargetWord, exercises, progress);
+  }, [activeTargetWord, showDebug, exercises, progress]);
 
   // Save progress whenever it changes
   useEffect(() => {
@@ -785,7 +792,9 @@ export default function ReadPage() {
           <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-                Exercise Selection Debug: {targetWord}
+                {activeTargetWord
+                  ? `Exercise Selection Debug: ${activeTargetWord}`
+                  : "Exercise Selection Debug"}
               </h3>
               <button
                 onClick={() => setShowDebug(false)}
