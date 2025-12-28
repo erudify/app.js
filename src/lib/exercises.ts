@@ -14,6 +14,7 @@ export interface ScoredExercise {
 const INITIAL_INTERVAL = 30; // 30 seconds
 const INTERVAL_MULTIPLIER = 5;
 const EARLY_REVIEW_MULTIPLIER = 1.05; // For words reviewed before their scheduled time
+const MAX_INTERVAL = 365 * 24 * 60 * 60; // 1 year cap
 
 /**
  * Get all words from an exercise (excluding punctuation - segments without pinyin)
@@ -207,13 +208,19 @@ export function updateWordSuccess(
   } else if (existing.nextReview > completedAt) {
     // Early review - word was reviewed before its scheduled time
     // Use smaller multiplier (1.05x)
-    newInterval = Math.round(existing.intervalSeconds * EARLY_REVIEW_MULTIPLIER);
+    newInterval = Math.min(
+      Math.round(existing.intervalSeconds * EARLY_REVIEW_MULTIPLIER),
+      MAX_INTERVAL
+    );
     consecutiveSuccesses = existing.consecutiveSuccesses + 1;
     wasEarlyReview = true;
   } else {
     // Normal review - word was due or overdue
     // Use full multiplier (5x)
-    newInterval = existing.intervalSeconds * INTERVAL_MULTIPLIER;
+    newInterval = Math.min(
+      existing.intervalSeconds * INTERVAL_MULTIPLIER,
+      MAX_INTERVAL
+    );
     consecutiveSuccesses = existing.consecutiveSuccesses + 1;
   }
 
