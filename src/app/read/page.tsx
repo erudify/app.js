@@ -718,9 +718,19 @@ export default function ReadPage() {
 
                   const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
 
+                  const showTransliteration =
+                    hintedWordIndices.has(segmentInputIndex) && Boolean(segment.transliteration);
+
                   return (
                     <div key={idx} className="flex flex-col items-center gap-1">
-                      <span className="h-4 text-sm leading-4 text-transparent">.</span>
+                      <span
+                        className={`h-4 text-sm leading-4 ${showTransliteration
+                          ? "text-zinc-500 dark:text-zinc-400"
+                          : "text-transparent"
+                          }`}
+                      >
+                        {showTransliteration ? segment.transliteration : "."}
+                      </span>
                       <span className="text-zinc-900 dark:text-white">
                         {segment.chinese}
                       </span>
