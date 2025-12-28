@@ -206,6 +206,7 @@ export default function ReadPage() {
   const [showDebug, setShowDebug] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [activeTargetWord, setActiveTargetWord] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -236,23 +237,50 @@ export default function ReadPage() {
 
   // Calculate progress stats
   const stats = useMemo(() => {
-    const now = Date.now();
     const wordEntries = Object.values(progress.words);
 
-    const knownCount = wordEntries.filter((w) => w.nextReview > now).length;
-    const reviewCount = wordEntries.filter((w) => w.nextReview <= now).length;
+    const knownCount = wordEntries.filter((w) => w.nextReview > currentTime).length;
+    const reviewCount = wordEntries.filter((w) => w.nextReview <= currentTime).length;
 
     // Words left in course:
     // We need to know which words in orderedWordList are NOT in progress.words
     const progressWordsSet = new Set(Object.keys(progress.words));
     const leftCount = orderedWordList.filter((word) => !progressWordsSet.has(word)).length;
 
+    // Find the next review time to schedule an update
+    const futureReviews = wordEntries
+      .map((w) => w.nextReview)
+      .filter((t) => t > currentTime);
+    const nextReviewTime = futureReviews.length > 0 ? Math.min(...futureReviews) : null;
+
     return {
       known: knownCount,
       review: reviewCount,
       left: leftCount,
+      nextReviewTime,
     };
-  }, [progress, orderedWordList]);
+  }, [progress, orderedWordList, currentTime]);
+
+  // Update currentTime when a word becomes due for review
+  useEffect(() => {
+    if (stats.nextReviewTime === null) return;
+
+    const timeUntilNextReview = stats.nextReviewTime - currentTime;
+    if (timeUntilNextReview <= 0) {
+      // Already past due, update immediately
+      setCurrentTime(Date.now());
+      return;
+    }
+
+    // Schedule update for when the next word becomes due
+    // Cap at 60 seconds to avoid very long timeouts and ensure reasonable responsiveness
+    const delay = Math.min(timeUntilNextReview, 60000);
+    const timer = setTimeout(() => {
+      setCurrentTime(Date.now());
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [stats.nextReviewTime, currentTime]);
 
   // Calculate the next exercise recommendation
   const nextExerciseData = useMemo(() => {
