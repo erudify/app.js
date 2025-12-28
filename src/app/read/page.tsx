@@ -616,8 +616,8 @@ export default function ReadPage() {
       <main className="flex-1 p-8">
         <div className="mx-auto max-w-4xl">
           {/* Current exercise */}
-          <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
-            <div className="mb-4 flex items-center justify-end">
+          <div className="relative mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
+            <div className="absolute right-4 top-4">
               <button
                 onClick={() => setShowDebug(true)}
                 className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
