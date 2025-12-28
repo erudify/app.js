@@ -204,7 +204,10 @@ export default function ReadPage() {
   const [showHint, setShowHint] = useState(false);
   const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
   const [showDebug, setShowDebug] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [activeTargetWord, setActiveTargetWord] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
 
   // Load exercises and word list on mount
   useEffect(() => {
@@ -271,11 +274,17 @@ export default function ReadPage() {
   const currentIndex = displayedExerciseIndex ?? -1;
   const targetWord = nextExerciseData?.index === displayedExerciseIndex ? nextExerciseData.targetWord : undefined;
 
+  useEffect(() => {
+    if (targetWord) {
+      setActiveTargetWord(targetWord);
+    }
+  }, [targetWord]);
+
   // Calculate debug candidates if targetWord is present
   const debugCandidates = useMemo(() => {
-    if (!targetWord || !showDebug) return [];
-    return getExerciseCandidates(targetWord, exercises, progress);
-  }, [targetWord, showDebug, exercises, progress]);
+    if (!activeTargetWord || !showDebug) return [];
+    return getExerciseCandidates(activeTargetWord, exercises, progress);
+  }, [activeTargetWord, showDebug, exercises, progress]);
 
   // Save progress whenever it changes
   useEffect(() => {
@@ -284,8 +293,17 @@ export default function ReadPage() {
 
   // Focus input when currentInputIndex changes
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [currentInputIndex]);
+    if (!showCompletion) {
+      inputRef.current?.focus();
+    }
+  }, [currentInputIndex, showCompletion]);
+
+  // Focus continue button when completion screen appears
+  useEffect(() => {
+    if (showCompletion) {
+      continueButtonRef.current?.focus();
+    }
+  }, [showCompletion]);
 
   // Get segments that need pinyin input (non-empty pinyin)
   const inputSegments = useMemo(() => {
@@ -357,8 +375,8 @@ export default function ReadPage() {
 
             setProgress(newProgress);
 
-            // Immediately advance to next exercise with updated progress
-            advanceToNextExercise(newProgress);
+            setInputValue("");
+            setShowCompletion(true);
           }
         }
       }
@@ -413,6 +431,11 @@ export default function ReadPage() {
     },
     [checkAndAdvance]
   );
+
+  const handleContinue = useCallback(() => {
+    setShowCompletion(false);
+    advanceToNextExercise(progress);
+  }, [advanceToNextExercise, progress]);
 
   /**
    * Get recent history (last 3 exercises)
@@ -593,99 +616,156 @@ export default function ReadPage() {
       <main className="flex-1 p-8">
         <div className="mx-auto max-w-4xl">
           {/* Current exercise */}
-          <div className="mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
-            {targetWord && (
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Reviewing: <span className="font-medium">{targetWord}</span>
-                </div>
-                <button
-                  onClick={() => setShowDebug(true)}
-                  className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-                  title="Debug exercise selection"
+          <div className="relative mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
+            <div className="absolute right-4 top-4">
+              <button
+                onClick={() => setShowDebug(true)}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                title="Debug exercise selection"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m8 2 1.88 1.88" />
-                    <path d="M14.12 3.88 16 2" />
-                    <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
-                    <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
-                    <path d="M12 20v-9" />
-                    <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
-                    <path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4" />
-                    <path d="M8.5 13h7" />
-                  </svg>
-                </button>
-              </div>
-            )}
+                  <path d="m8 2 1.88 1.88" />
+                  <path d="M14.12 3.88 16 2" />
+                  <path d="M9 7.13v-1a3.003 3.003 0 0 1 6 0v1" />
+                  <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+                  <path d="M12 20v-9" />
+                  <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+                  <path d="M17.47 9c1.93-.2 3.53-1.9 3.53-4" />
+                  <path d="M8.5 13h7" />
+                </svg>
+              </button>
+            </div>
 
-            {/* Chinese sentence with input fields */}
-            <div className="flex flex-wrap items-start gap-2 text-4xl">
-              {currentExercise.segments.map((segment, idx) => {
-                // Punctuation or empty pinyin
-                if (segment.pinyin === "") {
+            {showCompletion ? (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
+                  {currentExercise.segments.map((segment, idx) => {
+                    if (segment.pinyin === "") {
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-1">
+                          <span className="h-4 text-sm leading-4 text-transparent">.</span>
+                          <span className="text-zinc-900 dark:text-white">
+                            {segment.chinese}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
+
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        <span className="h-4 text-sm leading-4 text-zinc-500 dark:text-zinc-400">
+                          {segment.transliteration ?? ""}
+                        </span>
+                        <span className="text-zinc-900 dark:text-white">
+                          {segment.chinese}
+                        </span>
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
+                          style={{ width: pinyinWidth }}
+                        >
+                          {segment.pinyin}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-4 text-lg text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
+                  {currentExercise.english}
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    ref={continueButtonRef}
+                    type="button"
+                    onClick={handleContinue}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
+                {currentExercise.segments.map((segment, idx) => {
+                  // Punctuation or empty pinyin
+                  if (segment.pinyin === "") {
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        <span className="h-4 text-sm leading-4 text-transparent">.</span>
+                        <span className="text-zinc-900 dark:text-white">
+                          {segment.chinese}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const segmentInputIndex = inputSegmentIndex;
+                  inputSegmentIndex++;
+
+                  const isCurrentInput = segmentInputIndex === currentInputIndex;
+                  const isCompleted = segmentInputIndex < currentInputIndex;
+
+                  const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
+
+                  const showTransliteration =
+                    hintedWordIndices.has(segmentInputIndex) && Boolean(segment.transliteration);
+
                   return (
                     <div key={idx} className="flex flex-col items-center gap-1">
+                      <span
+                        className={`h-4 text-sm leading-4 ${showTransliteration
+                          ? "text-zinc-500 dark:text-zinc-400"
+                          : "text-transparent"
+                          }`}
+                      >
+                        {showTransliteration ? segment.transliteration : "."}
+                      </span>
                       <span className="text-zinc-900 dark:text-white">
                         {segment.chinese}
                       </span>
+                      {isCurrentInput ? (
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={inputValue}
+                          onChange={handleChange}
+                          onKeyDown={handleKeyDown}
+                          placeholder={showHint ? segment.pinyin : ""}
+                          style={{ width: pinyinWidth }}
+                          className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
+                          autoFocus
+                        />
+                      ) : isCompleted ? (
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
+                          style={{ width: pinyinWidth }}
+                        >
+                          {segment.pinyin}
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
+                          style={{ width: pinyinWidth }}
+                        >
+                          ___
+                        </span>
+                      )}
                     </div>
                   );
-                }
-
-                const segmentInputIndex = inputSegmentIndex;
-                inputSegmentIndex++;
-
-                const isCurrentInput = segmentInputIndex === currentInputIndex;
-                const isCompleted = segmentInputIndex < currentInputIndex;
-
-                const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
-
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-1">
-                    <span className="text-zinc-900 dark:text-white">
-                      {segment.chinese}
-                    </span>
-                    {isCurrentInput ? (
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={inputValue}
-                        onChange={handleChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder={showHint ? segment.pinyin : ""}
-                        style={{ width: pinyinWidth }}
-                        className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
-                        autoFocus
-                      />
-                    ) : isCompleted ? (
-                      <span
-                        className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
-                        style={{ width: pinyinWidth }}
-                      >
-                        {segment.pinyin}
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
-                        style={{ width: pinyinWidth }}
-                      >
-                        ___
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
           {/* Instructions */}
@@ -722,7 +802,9 @@ export default function ReadPage() {
           <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
             <div className="flex items-center justify-between border-b border-zinc-200 p-6 dark:border-zinc-800">
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-                Exercise Selection Debug: {targetWord}
+                {activeTargetWord
+                  ? `Exercise Selection Debug: ${activeTargetWord}`
+                  : "Exercise Selection Debug"}
               </h3>
               <button
                 onClick={() => setShowDebug(false)}
