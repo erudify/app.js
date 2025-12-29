@@ -1,4 +1,9 @@
 import type { Exercise, StudentProgress, WordIntervalChange } from "./types";
+import {
+  updateWordStateSuccess,
+  updateWordStateFailure,
+  type WordState,
+} from "./spaced-repetition";
 
 export interface ScoredExercise {
   exercise: Exercise;
@@ -10,11 +15,6 @@ export interface ScoredExercise {
     lastSeen: number;
   };
 }
-
-const INITIAL_INTERVAL = 30; // 30 seconds
-const INTERVAL_MULTIPLIER = 5;
-const EARLY_REVIEW_MULTIPLIER = 1.05; // For words reviewed before their scheduled time
-const MAX_INTERVAL = 365 * 24 * 60 * 60; // 1 year cap
 
 /**
  * Get all words from an exercise (excluding punctuation - segments without pinyin)
@@ -196,45 +196,23 @@ export function updateWordSuccess(
   completedAt: number
 ): { progress: StudentProgress; change: WordIntervalChange } {
   const existing = progress.words[word];
+  const existingState: WordState | null = existing
+    ? {
+        intervalSeconds: existing.intervalSeconds,
+        lastReviewed: existing.lastReviewed,
+        consecutiveSuccesses: existing.consecutiveSuccesses,
+      }
+    : null;
 
-  let newInterval: number;
-  let consecutiveSuccesses: number;
-  let wasEarlyReview = false;
-
-  if (!existing) {
-    // First time seeing this word
-    newInterval = INITIAL_INTERVAL;
-    consecutiveSuccesses = 1;
-  } else if (existing.nextReview > completedAt) {
-    // Early review - word was reviewed before its scheduled time
-    // Use smaller multiplier (1.05x)
-    newInterval = Math.min(
-      Math.round(existing.intervalSeconds * EARLY_REVIEW_MULTIPLIER),
-      MAX_INTERVAL
-    );
-    consecutiveSuccesses = existing.consecutiveSuccesses + 1;
-    wasEarlyReview = true;
-  } else {
-    // Normal review - word was due or overdue
-    // Use full multiplier (5x)
-    newInterval = Math.min(
-      existing.intervalSeconds * INTERVAL_MULTIPLIER,
-      MAX_INTERVAL
-    );
-    consecutiveSuccesses = existing.consecutiveSuccesses + 1;
-  }
-
-  const nextReview = completedAt + newInterval * 1000;
-
-  const change: WordIntervalChange = {
+  const { state: newState, change } = updateWordStateSuccess(
     word,
     pinyin,
-    oldIntervalSeconds: existing?.intervalSeconds ?? null,
-    newIntervalSeconds: newInterval,
-    nextReview,
-    wasEarlyReview,
-    wasFailure: false,
-  };
+    existingState,
+    completedAt
+  );
+
+  const nextReview = completedAt + newState.intervalSeconds * 1000;
+  const updatedChange = { ...change, nextReview };
 
   return {
     progress: {
@@ -243,14 +221,14 @@ export function updateWordSuccess(
         ...progress.words,
         [word]: {
           word,
-          lastReviewed: completedAt,
+          lastReviewed: newState.lastReviewed,
           nextReview,
-          intervalSeconds: newInterval,
-          consecutiveSuccesses,
+          intervalSeconds: newState.intervalSeconds,
+          consecutiveSuccesses: newState.consecutiveSuccesses,
         },
       },
     },
-    change,
+    change: updatedChange,
   };
 }
 
@@ -265,18 +243,14 @@ export function updateWordFailure(
   progress: StudentProgress,
   completedAt: number
 ): { progress: StudentProgress; change: WordIntervalChange } {
-  const existing = progress.words[word];
-  const nextReview = completedAt + INITIAL_INTERVAL * 1000;
-
-  const change: WordIntervalChange = {
+  const { state: newState, change } = updateWordStateFailure(
     word,
     pinyin,
-    oldIntervalSeconds: existing?.intervalSeconds ?? null,
-    newIntervalSeconds: INITIAL_INTERVAL,
-    nextReview,
-    wasEarlyReview: false, // Failures are never considered "early"
-    wasFailure: true,
-  };
+    completedAt
+  );
+
+  const nextReview = completedAt + newState.intervalSeconds * 1000;
+  const updatedChange = { ...change, nextReview };
 
   return {
     progress: {
@@ -285,14 +259,14 @@ export function updateWordFailure(
         ...progress.words,
         [word]: {
           word,
-          lastReviewed: completedAt,
+          lastReviewed: newState.lastReviewed,
           nextReview,
-          intervalSeconds: INITIAL_INTERVAL,
-          consecutiveSuccesses: 0,
+          intervalSeconds: newState.intervalSeconds,
+          consecutiveSuccesses: newState.consecutiveSuccesses,
         },
       },
     },
-    change,
+    change: updatedChange,
   };
 }
 

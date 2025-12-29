@@ -7,8 +7,24 @@ on:
     branches: [main]
 
 jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Install dependencies
+        run: nix develop --command npm ci
+
+      - name: Run unit tests
+        run: nix develop --command npx vitest --run
+
   e2e:
     runs-on: ubuntu-24.04
+    needs: unit
     steps:
       - uses: actions/checkout@v4
 
