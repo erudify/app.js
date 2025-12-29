@@ -17,11 +17,17 @@ export function PomodoroTimer() {
   const [completedSessions, setCompletedSessions] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isBreakRef = useRef(false);
+  const completedSessionsRef = useRef(0);
 
   // Keep ref in sync with state
   useEffect(() => {
     isBreakRef.current = isBreak;
   }, [isBreak]);
+
+  // Keep completedSessions ref in sync
+  useEffect(() => {
+    completedSessionsRef.current = completedSessions;
+  }, [completedSessions]);
 
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -43,7 +49,7 @@ export function PomodoroTimer() {
             setIsBreak(!wasBreak);
             
             // If completing a work session (not a break), increment completed sessions
-            if (!wasBreak && completedSessions < MAX_SESSIONS) {
+            if (!wasBreak && completedSessionsRef.current < MAX_SESSIONS) {
               setCompletedSessions((count) => count + 1);
             }
             
@@ -66,7 +72,7 @@ export function PomodoroTimer() {
         intervalRef.current = null;
       }
     };
-  }, [isRunning, completedSessions]);
+  }, [isRunning]);
 
   const handleStartPause = () => {
     setIsRunning(!isRunning);
