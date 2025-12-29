@@ -14,6 +14,12 @@ export function PomodoroTimer() {
   const [isBreak, setIsBreak] = useState(false);
   const [timeLeft, setTimeLeft] = useState(WORK_TIME);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isBreakRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isBreakRef.current = isBreak;
+  }, [isBreak]);
 
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -27,17 +33,14 @@ export function PomodoroTimer() {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
         setTimeLeft((prev) => {
-          if (prev <= 1) {
+          if (prev <= 0) {
             // Timer completed
             setIsRunning(false);
             // Auto-switch between work and break
-            if (!isBreak) {
-              setIsBreak(true);
-              return BREAK_TIME;
-            } else {
-              setIsBreak(false);
-              return WORK_TIME;
-            }
+            const wasBreak = isBreakRef.current;
+            setIsBreak(!wasBreak);
+            // Return the appropriate time for the next mode
+            return wasBreak ? WORK_TIME : BREAK_TIME;
           }
           return prev - 1;
         });
@@ -54,7 +57,7 @@ export function PomodoroTimer() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, isBreak]);
+  }, [isRunning]);
 
   const handleStartPause = () => {
     setIsRunning(!isRunning);
