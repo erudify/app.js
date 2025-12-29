@@ -1,4 +1,4 @@
-import type { Exercise, StudentProgress, WordIntervalChange } from "./types";
+import type { Exercise, StudentProgress, WordIntervalChange } from "./domain";
 import {
   updateWordStateSuccess,
   updateWordStateFailure,

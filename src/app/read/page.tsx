@@ -1,263 +1,62 @@
 "use client";
 
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useProgress } from "@/hooks/useProgress";
+import { useExercises } from "@/hooks/useExercises";
+import { useExerciseSelection } from "@/hooks/useExerciseSelection";
+import { useExerciseInput } from "@/hooks/useExerciseInput";
 import {
-  useState,
-  useEffect,
-  useRef,
-  useMemo,
-  KeyboardEvent,
-  ChangeEvent,
-  useCallback,
-} from "react";
-import Link from "next/link";
-import type {
-  Exercise,
-  StudentProgress,
-  ExerciseHistory,
-  WordIntervalChange,
-} from "@/lib/types";
-import {
-  selectNextExercise,
   updateWordSuccess,
   updateWordFailure,
   addExerciseToHistory,
   getExerciseWords,
   getPinyinForWord,
-  getExerciseCandidates,
-  ScoredExercise,
+  selectNextExercise,
 } from "@/lib/exercises";
-import { processPinyinInput } from "@/lib/pinyin";
-import { PomodoroTimer, type PomodoroState } from "@/components/PomodoroTimer";
 import { PomodoroIndicator } from "@/components/PomodoroIndicator";
-
-const STORAGE_KEY = "erudify-progress";
-
-/**
- * Load student progress from localStorage
- */
-function loadProgress(): StudentProgress {
-  if (typeof window === "undefined") {
-    return { words: {}, history: [], exerciseLastSeen: {} };
-  }
-
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Migration: Convert seenExercises Set array to exerciseLastSeen map
-      const exerciseLastSeen = parsed.exerciseLastSeen || {};
-      if (parsed.seenExercises) {
-        parsed.seenExercises.forEach((idx: number) => {
-          if (!exerciseLastSeen[idx]) exerciseLastSeen[idx] = 1; // Default old seen entries
-        });
-      }
-
-      return {
-        words: parsed.words || {},
-        history: parsed.history || [],
-        exerciseLastSeen: exerciseLastSeen,
-      };
-    }
-  } catch (error) {
-    console.error("Failed to load progress:", error);
-  }
-
-  return { words: {}, history: [], exerciseLastSeen: {} };
-}
-
-/**
- * Save student progress to localStorage
- */
-function saveProgress(progress: StudentProgress): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    const toStore = {
-      words: progress.words,
-      history: progress.history,
-      exerciseLastSeen: progress.exerciseLastSeen,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
-  } catch (error) {
-    console.error("Failed to save progress:", error);
-  }
-}
-
-/**
- * Parse YAML exercises (simple parser for our specific format)
- */
-function parseExercises(yaml: string): Exercise[] {
-  const exercises: Exercise[] = [];
-  const lines = yaml.split("\n");
-
-  let currentExercise: Exercise | null = null;
-  let currentSegment: { chinese?: string; pinyin?: string; transliteration?: string } | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith("- english:")) {
-      // Start new exercise
-      if (currentExercise) {
-        // Add the last segment of the previous exercise if it exists
-        if (currentSegment && currentSegment.chinese) {
-          currentExercise.segments.push({
-            chinese: currentSegment.chinese,
-            pinyin: currentSegment.pinyin || "",
-            transliteration: currentSegment.transliteration,
-          });
-          currentSegment = null;
-        }
-        exercises.push(currentExercise);
-      }
-      currentExercise = { segments: [], english: trimmed.slice(10).trim() };
-      currentSegment = null;
-    } else if (trimmed === "chunks:") {
-      // Just a marker
-    } else if (trimmed.startsWith("- chinese:")) {
-      // Start new segment
-      if (currentSegment && currentSegment.chinese && currentExercise) {
-        currentExercise.segments.push({
-          chinese: currentSegment.chinese,
-          pinyin: currentSegment.pinyin || "",
-          transliteration: currentSegment.transliteration,
-        });
-      }
-      currentSegment = { chinese: trimmed.slice(10).trim() };
-    } else if (trimmed.startsWith("pinyin:")) {
-      // Add pinyin to current segment
-      if (currentSegment) {
-        let p = trimmed.slice(7).trim().replace(/'/g, "");
-        // If it's punctuation, set to empty string to avoid requiring input for it
-        if (/^[.,!?;:，。？！：、]$/.test(p)) {
-          p = "";
-        }
-        currentSegment.pinyin = p;
-      }
-    } else if (trimmed.startsWith("transliteration:")) {
-      // Add transliteration to current segment
-      if (currentSegment) {
-        currentSegment.transliteration = trimmed.slice(16).trim().replace(/'/g, "");
-      }
-    }
-  }
-
-  // Add the last segment and exercise
-  if (currentExercise && currentSegment && currentSegment.chinese) {
-    currentExercise.segments.push({
-      chinese: currentSegment.chinese,
-      pinyin: currentSegment.pinyin || "",
-      transliteration: currentSegment.transliteration,
-    });
-  }
-  if (currentExercise) {
-    exercises.push(currentExercise);
-  }
-
-  return exercises;
-}
-
-/**
- * Normalize pinyin for comparison (lowercase, remove spaces)
- */
-function normalizePinyin(pinyin: string): string {
-  return pinyin.toLowerCase().replace(/\s+/g, "");
-}
-
-/**
- * Format duration in short form (e.g., "1m 2w", "1w 2d", "3h 15min", "30sec")
- */
-function formatDuration(seconds: number): string {
-  const months = Math.floor(seconds / (30 * 24 * 60 * 60));
-  seconds %= 30 * 24 * 60 * 60;
-  const weeks = Math.floor(seconds / (7 * 24 * 60 * 60));
-  seconds %= 7 * 24 * 60 * 60;
-  const days = Math.floor(seconds / (24 * 60 * 60));
-  seconds %= 24 * 60 * 60;
-  const hours = Math.floor(seconds / (60 * 60));
-  seconds %= 60 * 60;
-  const minutes = Math.floor(seconds / 60);
-  seconds = Math.floor(seconds % 60);
-
-  const parts: string[] = [];
-
-  if (months > 0) parts.push(`${months}m`);
-  if (weeks > 0) parts.push(`${weeks}w`);
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}min`);
-  if (seconds > 0 && parts.length === 0) parts.push(`${seconds}sec`);
-
-  // Return at most 2 parts
-  return parts.slice(0, 2).join(" ") || "0sec";
-}
-
-/**
- * Format a date for display
- */
-function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleString();
-}
+import { PomodoroTimer } from "@/components/PomodoroTimer";
+import { Sidebar } from "@/components/Sidebar";
+import { ExerciseDisplay } from "@/components/ExerciseDisplay";
+import { InstructionsPanel } from "@/components/InstructionsPanel";
+import { DebugModal } from "@/components/DebugModal";
+import type { PomodoroState } from "@/components/PomodoroTimer";
 
 export default function ReadPage() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [orderedWordList, setOrderedWordList] = useState<string[]>([]);
-  const [progress, setProgress] = useState<StudentProgress>(() => loadProgress());
+  const { progress, updateProgress, clearProgress } = useProgress();
+  const { exercises, wordList, loading, error } = useExercises();
   const [displayedExerciseIndex, setDisplayedExerciseIndex] = useState<number | null>(null);
-  const [currentInputIndex, setCurrentInputIndex] = useState(0);
-  const [inputValue, setInputValue] = useState("");
-  const [showHint, setShowHint] = useState(false);
-  const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set()); // Track which word indices had hints
-  const [showDebug, setShowDebug] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
-  const [activeTargetWord, setActiveTargetWord] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
     isRunning: false,
     isBreak: false,
     timeLeft: 0,
   });
-  const inputRef = useRef<HTMLInputElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Load exercises and word list on mount
+  const { currentExercise, currentIndex, targetWord, debugCandidates } = useExerciseSelection(
+    exercises,
+    progress,
+    wordList,
+    displayedExerciseIndex
+  );
+
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [exRes, wordRes] = await Promise.all([
-          fetch("/HSK-1.yml"),
-          fetch("/HSK 1.txt")
-        ]);
-
-        const yamlText = await exRes.text();
-        const wordText = await wordRes.text();
-
-        const parsedEx = parseExercises(yamlText);
-        const parsedWords = wordText.split("\n").map(w => w.trim()).filter(w => w !== "" && !w.startsWith("#"));
-
-        setExercises(parsedEx);
-        setOrderedWordList(parsedWords);
-      } catch (error) {
-        console.error("Failed to load data:", error);
-      }
+    if (displayedExerciseIndex === null && currentExercise) {
+      setDisplayedExerciseIndex(currentIndex);
     }
+  }, [displayedExerciseIndex, currentExercise, currentIndex]);
 
-    loadData();
-  }, []);
-
-  // Calculate progress stats
   const stats = useMemo(() => {
     const wordEntries = Object.values(progress.words);
 
     const knownCount = wordEntries.filter((w) => w.nextReview > currentTime).length;
     const reviewCount = wordEntries.filter((w) => w.nextReview <= currentTime).length;
 
-    // Words left in course:
-    // We need to know which words in orderedWordList are NOT in progress.words
     const progressWordsSet = new Set(Object.keys(progress.words));
-    const leftCount = orderedWordList.filter((word) => !progressWordsSet.has(word)).length;
+    const leftCount = wordList.filter((word) => !progressWordsSet.has(word)).length;
 
-    // Find the next review time to schedule an update
     const futureReviews = wordEntries
       .map((w) => w.nextReview)
       .filter((t) => t > currentTime);
@@ -269,21 +68,17 @@ export default function ReadPage() {
       left: leftCount,
       nextReviewTime,
     };
-  }, [progress, orderedWordList, currentTime]);
+  }, [progress, wordList, currentTime]);
 
-  // Update currentTime when a word becomes due for review
   useEffect(() => {
     if (stats.nextReviewTime === null) return;
 
     const timeUntilNextReview = stats.nextReviewTime - currentTime;
     if (timeUntilNextReview <= 0) {
-      // Already past due, update immediately
       setCurrentTime(Date.now());
       return;
     }
 
-    // Schedule update for when the next word becomes due
-    // Cap at 60 seconds to avoid very long timeouts and ensure reasonable responsiveness
     const delay = Math.min(timeUntilNextReview, 60000);
     const timer = setTimeout(() => {
       setCurrentTime(Date.now());
@@ -292,215 +87,92 @@ export default function ReadPage() {
     return () => clearTimeout(timer);
   }, [stats.nextReviewTime, currentTime]);
 
-  // Calculate the next exercise recommendation
-  const nextExerciseData = useMemo(() => {
-    if (exercises.length === 0) {
-      return null;
+  const advanceToNextExercise = useCallback(
+    (updatedProgress = progress) => {
+      const next = selectNextExercise(exercises, updatedProgress, wordList);
+      if (next) {
+        setDisplayedExerciseIndex(next.index);
+      }
+      setShowCompletion(false);
+    },
+    [exercises, progress, wordList]
+  );
+
+  const {
+    inputValue,
+    setInputValue,
+    currentInputIndex,
+    showHint,
+    hintedWordIndices,
+    inputRef,
+    handleKeyDown,
+    handleChange,
+    reset,
+  } = useExerciseInput({
+    segments: currentExercise?.segments ?? [],
+    onSegmentComplete: () => {},
+    onComplete: (hints) => handleExerciseCompletion(hints),
+  });
+
+  const handleExerciseCompletion = useCallback(
+    (hintsUsed: Set<number>) => {
+      if (!currentExercise) return;
+
+      const completedAt = Date.now();
+      let newProgress = progress;
+      const words = getExerciseWords(currentExercise);
+      const wordChanges: import("@/lib/domain").WordIntervalChange[] = [];
+
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        const pinyin = getPinyinForWord(currentExercise, word);
+
+        if (hintsUsed.has(i)) {
+          const result = updateWordFailure(word, pinyin, newProgress, completedAt);
+          newProgress = result.progress;
+          wordChanges.push(result.change);
+        } else {
+          const result = updateWordSuccess(word, pinyin, newProgress, completedAt);
+          newProgress = result.progress;
+          wordChanges.push(result.change);
+        }
+      }
+
+      newProgress = addExerciseToHistory(
+        currentIndex,
+        hintsUsed.size === 0,
+        currentExercise,
+        wordChanges,
+        newProgress
+      );
+
+      updateProgress(newProgress);
+      setInputValue("");
+      setShowCompletion(true);
+    },
+    [currentExercise, progress, currentIndex, updateProgress, setInputValue]
+  );
+
+  const handleContinue = useCallback(() => {
+    setShowCompletion(false);
+    reset();
+    advanceToNextExercise();
+  }, [advanceToNextExercise, reset]);
+
+  const handleClearProgress = useCallback(() => {
+    if (confirm("Are you sure you want to clear all progress? This cannot be undone.")) {
+      clearProgress();
+      advanceToNextExercise();
     }
-    return selectNextExercise(exercises, progress, orderedWordList);
-  }, [exercises, progress, orderedWordList]);
+  }, [clearProgress, advanceToNextExercise]);
 
-  // Set initial exercise when exercises load
-  useEffect(() => {
-    if (displayedExerciseIndex === null && nextExerciseData) {
-      setDisplayedExerciseIndex(nextExerciseData.index);
-    }
-  }, [displayedExerciseIndex, nextExerciseData]);
-
-  // Get the currently displayed exercise
-  const currentExercise = displayedExerciseIndex !== null ? exercises[displayedExerciseIndex] : null;
-  const currentIndex = displayedExerciseIndex ?? -1;
-  const targetWord = nextExerciseData?.index === displayedExerciseIndex ? nextExerciseData.targetWord : undefined;
-
-  useEffect(() => {
-    if (targetWord) {
-      setActiveTargetWord(targetWord);
-    }
-  }, [targetWord]);
-
-  // Calculate debug candidates if targetWord is present
-  const debugCandidates = useMemo(() => {
-    if (!activeTargetWord || !showDebug) return [];
-    return getExerciseCandidates(activeTargetWord, exercises, progress);
-  }, [activeTargetWord, showDebug, exercises, progress]);
-
-  // Save progress whenever it changes
-  useEffect(() => {
-    saveProgress(progress);
-  }, [progress]);
-
-  // Focus input when currentInputIndex changes
-  useEffect(() => {
-    if (!showCompletion) {
-      inputRef.current?.focus();
-    }
-  }, [currentInputIndex, showCompletion]);
-
-  // Focus continue button when completion screen appears
   useEffect(() => {
     if (showCompletion) {
       continueButtonRef.current?.focus();
     }
   }, [showCompletion]);
 
-  // Get segments that need pinyin input (non-empty pinyin)
-  const inputSegments = useMemo(() => {
-    return currentExercise
-      ? currentExercise.segments.filter((seg) => seg.pinyin !== "")
-      : [];
-  }, [currentExercise]);
-  const totalInputs = inputSegments.length;
-
-  // Move to next exercise (pass the updated progress to get correct next exercise)
-  const advanceToNextExercise = useCallback((updatedProgress: StudentProgress) => {
-    const next = selectNextExercise(exercises, updatedProgress, orderedWordList);
-    if (next) {
-      setDisplayedExerciseIndex(next.index);
-    }
-    setCurrentInputIndex(0);
-    setInputValue("");
-    setShowHint(false);
-    setHintedWordIndices(new Set());
-  }, [exercises, orderedWordList]);
-
-  // Check if input matches and advance to next segment
-  const checkAndAdvance = useCallback(
-    (newValue: string) => {
-      const currentSegment = inputSegments[currentInputIndex];
-      if (
-        currentSegment &&
-        normalizePinyin(newValue) === normalizePinyin(currentSegment.pinyin)
-      ) {
-        // Move to next segment
-        if (currentInputIndex < totalInputs - 1) {
-          setCurrentInputIndex((prev) => prev + 1);
-          setInputValue("");
-          setShowHint(false);
-        } else {
-          // All segments completed - update progress and immediately advance
-          if (currentExercise) {
-            const completedAt = Date.now(); // Use same timestamp for all words
-            let newProgress = progress;
-            const words = getExerciseWords(currentExercise);
-            const wordChanges: WordIntervalChange[] = [];
-
-            // Update each word based on whether a hint was used for that specific word
-            for (let i = 0; i < words.length; i++) {
-              const word = words[i];
-              const pinyin = getPinyinForWord(currentExercise, word);
-
-              if (hintedWordIndices.has(i)) {
-                // Hint was used for this word - mark as failure
-                const result = updateWordFailure(word, pinyin, newProgress, completedAt);
-                newProgress = result.progress;
-                wordChanges.push(result.change);
-              } else {
-                // No hint for this word - mark as success
-                const result = updateWordSuccess(word, pinyin, newProgress, completedAt);
-                newProgress = result.progress;
-                wordChanges.push(result.change);
-              }
-            }
-
-            // Add to history (success if no hints were used at all)
-            newProgress = addExerciseToHistory(
-              currentIndex,
-              hintedWordIndices.size === 0,
-              currentExercise,
-              wordChanges,
-              newProgress
-            );
-
-            setProgress(newProgress);
-
-            setInputValue("");
-            setShowCompletion(true);
-          }
-        }
-      }
-    },
-    [currentInputIndex, inputSegments, totalInputs, currentExercise, progress, hintedWordIndices, currentIndex, advanceToNextExercise]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      const key = e.key;
-
-      // Handle Escape key for hints
-      if (key === "Escape") {
-        e.preventDefault();
-        if (!showHint && currentInputIndex < inputSegments.length) {
-          setInputValue("");
-          setShowHint(true);
-          // Track that this specific word index had a hint
-          setHintedWordIndices((prev) => new Set(prev).add(currentInputIndex));
-        }
-        return;
-      }
-
-      // Check if it's a tone number (0-4)
-      if (/^[0-4]$/.test(key)) {
-        e.preventDefault();
-        const input = e.currentTarget;
-        const selectionStart = input.selectionStart ?? inputValue.length;
-
-        const { newText, newCursorPos } = processPinyinInput(
-          inputValue,
-          selectionStart,
-          parseInt(key, 10)
-        );
-
-        setInputValue(newText);
-        checkAndAdvance(newText);
-
-        requestAnimationFrame(() => {
-          input.setSelectionRange(newCursorPos, newCursorPos);
-        });
-      }
-    },
-    [inputValue, checkAndAdvance, showHint, currentInputIndex, inputSegments]
-  );
-
-  const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      setInputValue(newValue);
-      checkAndAdvance(newValue);
-    },
-    [checkAndAdvance]
-  );
-
-  const handleContinue = useCallback(() => {
-    setShowCompletion(false);
-    advanceToNextExercise(progress);
-  }, [advanceToNextExercise, progress]);
-
-  /**
-   * Get recent history (last 3 exercises)
-   */
-  function getRecentHistory(): ExerciseHistory[] {
-    return progress.history.slice(-3).reverse();
-  }
-
-  /**
-   * Clear all progress and start from scratch
-   */
-  const handleClearProgress = useCallback(() => {
-    if (confirm("Are you sure you want to clear all progress? This cannot be undone.")) {
-      const emptyProgress: StudentProgress = {
-        words: {},
-        history: [],
-        exerciseLastSeen: {},
-      };
-      setProgress(emptyProgress);
-      saveProgress(emptyProgress);
-
-      // Use advanceToNextExercise with empty progress to select first exercise
-      advanceToNextExercise(emptyProgress);
-    }
-  }, [advanceToNextExercise]);
-
-  if (!currentExercise) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-lg text-zinc-600">Loading exercises...</div>
@@ -508,8 +180,23 @@ export default function ReadPage() {
     );
   }
 
-  // Track which segment index we're currently at for rendering
-  let inputSegmentIndex = 0;
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg text-red-600">
+          Error loading data: {error.message}
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentExercise) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg text-zinc-600">No exercises available.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -528,159 +215,18 @@ export default function ReadPage() {
           animation: historySlideIn 0.3s ease-out;
         }
       `}</style>
-      {/* Sidebar */}
-      <aside className="w-80 overflow-y-auto border-r border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-xl font-bold text-zinc-900 dark:text-white">
-          Erudify
-        </h2>
 
-        <nav className="space-y-2">
-          <Link
-            href="/"
-            className="block rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            Home
-          </Link>
-          <Link
-            href="/read"
-            className="block rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 dark:bg-red-950 dark:text-red-400"
-          >
-            Study
-          </Link>
-        </nav>
+      <Sidebar
+        progress={progress}
+        stats={stats}
+        onClearProgress={handleClearProgress}
+        onPomodoroStateChange={setPomodoroState}
+      />
 
-        <div className="mt-8">
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Progress
-          </h3>
-          <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
-            <div className="flex justify-between">
-              <span>Known words:</span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                {stats.known}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Review words:</span>
-              <span className="font-medium text-red-600 dark:text-red-400">
-                {stats.review}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Words left:</span>
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                {stats.left}
-              </span>
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-zinc-500">
-            Exercises: {Object.keys(progress.exerciseLastSeen).length}
-          </div>
-        </div>
-
-        <PomodoroTimer onStateChange={setPomodoroState} />
-
-        <div className="mt-8">
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Recent History
-          </h3>
-          <div className="space-y-3">
-            {getRecentHistory().map((item) => {
-              // Build a map of word -> change for colorization
-              const wordChangeMap = new Map<string, WordIntervalChange>();
-              item.wordChanges?.forEach((change) => {
-                wordChangeMap.set(change.word, change);
-              });
-
-              // Colorize Chinese text by matching words
-              const colorizedChinese: React.ReactNode[] = [];
-              let remaining = item.chinese;
-              let keyIdx = 0;
-
-              while (remaining.length > 0) {
-                let matched = false;
-
-                // Try to match words from wordChanges
-                for (const change of item.wordChanges ?? []) {
-                  if (remaining.startsWith(change.word)) {
-                    // Determine color based on change type
-                    let colorClass: string;
-                    if (change.wasFailure) {
-                      colorClass = "text-red-600 dark:text-red-400";
-                    } else if (change.wasEarlyReview) {
-                      colorClass = "text-zinc-900 dark:text-white";
-                    } else {
-                      colorClass = "text-green-600 dark:text-green-400";
-                    }
-
-                    colorizedChinese.push(
-                      <span
-                        key={keyIdx++}
-                        className={colorClass}
-                        title={`Review in ${formatDuration(change.newIntervalSeconds)}`}
-                      >
-                        {change.word}
-                      </span>
-                    );
-                    remaining = remaining.slice(change.word.length);
-                    matched = true;
-                    break;
-                  }
-                }
-
-                // If no word matched, take the next character (punctuation)
-                if (!matched) {
-                  colorizedChinese.push(
-                    <span key={keyIdx++} className="text-zinc-900 dark:text-white">
-                      {remaining[0]}
-                    </span>
-                  );
-                  remaining = remaining.slice(1);
-                }
-              }
-
-              return (
-                <div
-                  key={item.completedAt}
-                  className="history-item-animate rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-700"
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className={item.success ? "text-green-600" : "text-red-600"}>
-                      {item.success ? "✓" : "✗"}
-                    </span>
-                    <span className="font-medium">
-                      {colorizedChinese}
-                    </span>
-                  </div>
-                  <div className="mb-1 text-zinc-500 dark:text-zinc-400">
-                    {item.pinyin}
-                  </div>
-                  <div className="text-zinc-600 dark:text-zinc-300">
-                    {item.english}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <button
-            onClick={handleClearProgress}
-            className="w-full rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/50"
-          >
-            Clear Progress
-          </button>
-        </div>
-      </aside>
-
-      {/* Main content */}
       <main className="flex-1 p-8">
         <div className="mx-auto max-w-4xl">
-          {/* Pomodoro Indicator */}
           <PomodoroIndicator state={pomodoroState} />
-          
-          {/* Current exercise */}
+
           <div className="relative mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
             <div className="absolute right-4 top-4">
               <button
@@ -712,219 +258,42 @@ export default function ReadPage() {
             </div>
 
             {showCompletion ? (
-              <div className="space-y-6">
-                <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
-                  {currentExercise.segments.map((segment, idx) => {
-                    if (segment.pinyin === "") {
-                      return (
-                        <div key={idx} className="flex flex-col items-center gap-1">
-                          <span className="h-4 text-sm leading-4 text-transparent">.</span>
-                          <span className="text-zinc-900 dark:text-white">
-                            {segment.chinese}
-                          </span>
-                        </div>
-                      );
-                    }
-
-                    const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
-
-                    return (
-                      <div key={idx} className="flex flex-col items-center gap-1">
-                        <span className="h-4 text-sm leading-4 text-zinc-500 dark:text-zinc-400">
-                          {segment.transliteration ?? ""}
-                        </span>
-                        <span className="text-zinc-900 dark:text-white">
-                          {segment.chinese}
-                        </span>
-                        <span
-                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
-                          style={{ width: pinyinWidth }}
-                        >
-                          {segment.pinyin}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="rounded-lg bg-zinc-50 p-4 text-lg text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200">
-                  {currentExercise.english}
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    ref={continueButtonRef}
-                    type="button"
-                    onClick={handleContinue}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                  >
-                    Continue
-                  </button>
-                </div>
+              <div className="flex justify-end">
+                <button
+                  ref={continueButtonRef}
+                  type="button"
+                  onClick={handleContinue}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                >
+                  Continue
+                </button>
               </div>
             ) : (
-              <div className="flex flex-wrap items-start gap-2 text-[2.5rem]">
-                {currentExercise.segments.map((segment, idx) => {
-                  // Punctuation or empty pinyin
-                  if (segment.pinyin === "") {
-                    return (
-                      <div key={idx} className="flex flex-col items-center gap-1">
-                        <span className="h-4 text-sm leading-4 text-transparent">.</span>
-                        <span className="text-zinc-900 dark:text-white">
-                          {segment.chinese}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  const segmentInputIndex = inputSegmentIndex;
-                  inputSegmentIndex++;
-
-                  const isCurrentInput = segmentInputIndex === currentInputIndex;
-                  const isCompleted = segmentInputIndex < currentInputIndex;
-
-                  const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
-
-                  const showTransliteration =
-                    hintedWordIndices.has(segmentInputIndex) && Boolean(segment.transliteration);
-
-                  return (
-                    <div key={idx} className="flex flex-col items-center gap-1">
-                      <span
-                        className={`h-4 text-sm leading-4 ${showTransliteration
-                          ? "text-zinc-500 dark:text-zinc-400"
-                          : "text-transparent"
-                          }`}
-                      >
-                        {showTransliteration ? segment.transliteration : "."}
-                      </span>
-                      <span className="text-zinc-900 dark:text-white">
-                        {segment.chinese}
-                      </span>
-                      {isCurrentInput ? (
-                        <input
-                          ref={inputRef}
-                          type="text"
-                          value={inputValue}
-                          onChange={handleChange}
-                          onKeyDown={handleKeyDown}
-                          placeholder={showHint ? segment.pinyin : ""}
-                          style={{ width: pinyinWidth }}
-                          className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
-                          autoFocus
-                        />
-                      ) : isCompleted ? (
-                        <span
-                          className="inline-block px-2 py-1 text-center text-base text-green-600 dark:text-green-400"
-                          style={{ width: pinyinWidth }}
-                        >
-                          {segment.pinyin}
-                        </span>
-                      ) : (
-                        <span
-                          className="inline-block px-2 py-1 text-center text-base text-zinc-400 dark:text-zinc-600"
-                          style={{ width: pinyinWidth }}
-                        >
-                          ___
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <ExerciseDisplay
+                exercise={currentExercise}
+                isComplete={false}
+                currentInputIndex={currentInputIndex}
+                inputValue={inputValue}
+                showHint={showHint}
+                hintedWordIndices={hintedWordIndices}
+                inputRef={inputRef}
+                onInputChange={handleChange}
+                onInputKeyDown={handleKeyDown}
+              />
             )}
           </div>
 
-          {/* Instructions */}
-          <div className="rounded-lg bg-zinc-100 p-4 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-            <p className="mb-2 font-medium text-zinc-700 dark:text-zinc-300">
-              How to study:
-            </p>
-            <ul className="list-inside list-disc space-y-1">
-              <li>Type pinyin followed by a tone number (1-4) for tone marks</li>
-              <li>
-                Example:{" "}
-                <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-700">
-                  wo3
-                </code>{" "}
-                becomes wǒ
-              </li>
-              <li>
-                Press{" "}
-                <kbd className="rounded bg-zinc-200 px-2 py-1 font-mono dark:bg-zinc-700">
-                  Escape
-                </kbd>{" "}
-                to see a hint (will affect your review schedule)
-              </li>
-              <li>Use 0 to remove the last tone mark</li>
-              <li>v = ü (e.g., lv4 → lǜ)</li>
-            </ul>
-          </div>
+          <InstructionsPanel />
         </div>
       </main>
 
-      {/* Debug Modal */}
-      {showDebug && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-200 p-6 dark:border-zinc-800">
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {activeTargetWord
-                  ? `Exercise Selection Debug: ${activeTargetWord}`
-                  : "Exercise Selection Debug"}
-              </h3>
-              <button
-                onClick={() => setShowDebug(false)}
-                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="space-y-4">
-                {debugCandidates.map((cand) => (
-                  <div
-                    key={cand.index}
-                    className={`rounded-xl border p-4 ${cand.index === currentIndex
-                      ? "border-red-500 bg-red-50/50 dark:border-red-900 dark:bg-red-900/20"
-                      : "border-zinc-200 dark:border-zinc-800"
-                      }`}
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-sm font-bold text-zinc-900 dark:text-white">
-                        Option #{cand.index} {cand.index === currentIndex && " (Selected)"}
-                      </span>
-                      <span className="rounded bg-zinc-100 px-2 py-0.5 text-sm font-mono font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                        Score: {cand.score}
-                      </span>
-                    </div>
-                    <div className="mb-3">
-                      <div className="text-lg text-zinc-900 dark:text-white">{cand.exercise.segments.map(s => s.chinese).join("")}</div>
-                      <div className="text-sm text-zinc-500">{cand.exercise.english}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {Object.entries(cand.breakdown.wordScores).map(([word, score]) => (
-                        <span key={word} className={`rounded-full px-2 py-0.5 ${score > 0 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>
-                          {word}: {score}
-                        </span>
-                      ))}
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                        Last seen: {cand.breakdown.lastSeen === 0 ? "Never" : new Date(cand.breakdown.lastSeen).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="border-t border-zinc-200 p-6 dark:border-zinc-800">
-              <button
-                onClick={() => setShowDebug(false)}
-                className="w-full rounded-xl bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DebugModal
+        show={showDebug}
+        onClose={() => setShowDebug(false)}
+        targetWord={targetWord}
+        currentIndex={currentIndex}
+        candidates={debugCandidates}
+      />
     </div>
   );
 }

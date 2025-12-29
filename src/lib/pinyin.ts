@@ -315,3 +315,8 @@ export function simulateTyping(input: string): string {
 
   return text;
 }
+
+// Normalize pinyin for comparison (lowercase, remove spaces)
+export function normalizePinyin(pinyin: string): string {
+  return pinyin.toLowerCase().replace(/\s+/g, "");
+}
