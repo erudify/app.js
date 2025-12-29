@@ -4,20 +4,37 @@ import { useState, useEffect, useRef } from "react";
 
 const WORK_TIME = 10 * 60; // 10 minutes in seconds
 const BREAK_TIME = 5 * 60; // 5 minutes in seconds
+const TEST_WORK_TIME = 10; // 10 seconds for testing
+const TEST_BREAK_TIME = 5; // 5 seconds for testing
 const MAX_SESSIONS = 3; // Three sessions to complete
+
+export interface PomodoroState {
+  isRunning: boolean;
+  isBreak: boolean;
+  timeLeft: number;
+}
+
+interface PomodoroTimerProps {
+  onStateChange?: (state: PomodoroState) => void;
+}
 
 /**
  * A simple, minimalistic Pomodoro timer component
  */
-export function PomodoroTimer() {
+export function PomodoroTimer({ onStateChange }: PomodoroTimerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const [timeLeft, setTimeLeft] = useState(WORK_TIME);
   const [completedSessions, setCompletedSessions] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isBreakRef = useRef(false);
   const completedSessionsRef = useRef(0);
+  const testModeRef = useRef(false);
+  
+  const workTime = testMode ? TEST_WORK_TIME : WORK_TIME;
+  const breakTime = testMode ? TEST_BREAK_TIME : BREAK_TIME;
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -28,6 +45,16 @@ export function PomodoroTimer() {
   useEffect(() => {
     completedSessionsRef.current = completedSessions;
   }, [completedSessions]);
+
+  // Keep testMode ref in sync
+  useEffect(() => {
+    testModeRef.current = testMode;
+  }, [testMode]);
+
+  // Notify parent of state changes
+  useEffect(() => {
+    onStateChange?.({ isRunning, isBreak, timeLeft });
+  }, [isRunning, isBreak, timeLeft, onStateChange]);
 
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -54,7 +81,10 @@ export function PomodoroTimer() {
             }
             
             // Return the appropriate time for the next mode
-            return wasBreak ? WORK_TIME : BREAK_TIME;
+            const currentTestMode = testModeRef.current;
+            return wasBreak 
+              ? (currentTestMode ? TEST_WORK_TIME : WORK_TIME)
+              : (currentTestMode ? TEST_BREAK_TIME : BREAK_TIME);
           }
           return prev - 1;
         });
@@ -81,14 +111,23 @@ export function PomodoroTimer() {
   const handleReset = () => {
     setIsRunning(false);
     setIsBreak(false);
-    setTimeLeft(WORK_TIME);
+    setTimeLeft(workTime);
     setCompletedSessions(0);
   };
 
   const handleToggleMode = () => {
     setIsRunning(false);
     setIsBreak(!isBreak);
-    setTimeLeft(!isBreak ? BREAK_TIME : WORK_TIME);
+    setTimeLeft(!isBreak ? breakTime : workTime);
+  };
+
+  const handleTestModeToggle = () => {
+    const newTestMode = !testMode;
+    setTestMode(newTestMode);
+    setIsRunning(false);
+    setIsBreak(false);
+    setTimeLeft(newTestMode ? TEST_WORK_TIME : WORK_TIME);
+    setCompletedSessions(0);
   };
 
   return (
@@ -166,6 +205,14 @@ export function PomodoroTimer() {
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-700"
           >
             Switch to {isBreak ? "Focus" : "Break"}
+          </button>
+
+          {/* Test Mode Toggle */}
+          <button
+            onClick={handleTestModeToggle}
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-700"
+          >
+            {testMode ? "⚡ Test Mode (10s/5s)" : "Test Mode"}
           </button>
         </div>
       )}

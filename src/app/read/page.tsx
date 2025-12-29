@@ -27,7 +27,8 @@ import {
   ScoredExercise,
 } from "@/lib/exercises";
 import { processPinyinInput } from "@/lib/pinyin";
-import { PomodoroTimer } from "@/components/PomodoroTimer";
+import { PomodoroTimer, type PomodoroState } from "@/components/PomodoroTimer";
+import { PomodoroIndicator } from "@/components/PomodoroIndicator";
 
 const STORAGE_KEY = "erudify-progress";
 
@@ -211,6 +212,11 @@ export default function ReadPage() {
   const [showCompletion, setShowCompletion] = useState(false);
   const [activeTargetWord, setActiveTargetWord] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
+    isRunning: false,
+    isBreak: false,
+    timeLeft: 0,
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const continueButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -572,7 +578,7 @@ export default function ReadPage() {
           </div>
         </div>
 
-        <PomodoroTimer />
+        <PomodoroTimer onStateChange={setPomodoroState} />
 
         <div className="mt-8">
           <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -671,6 +677,9 @@ export default function ReadPage() {
       {/* Main content */}
       <main className="flex-1 p-8">
         <div className="mx-auto max-w-4xl">
+          {/* Pomodoro Indicator */}
+          <PomodoroIndicator state={pomodoroState} />
+          
           {/* Current exercise */}
           <div className="relative mb-8 rounded-2xl bg-white p-8 shadow-sm dark:bg-zinc-900">
             <div className="absolute right-4 top-4">
