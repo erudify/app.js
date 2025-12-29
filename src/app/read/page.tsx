@@ -27,6 +27,7 @@ import {
   ScoredExercise,
 } from "@/lib/exercises";
 import { processPinyinInput } from "@/lib/pinyin";
+import { PomodoroTimer } from "@/components/PomodoroTimer";
 
 const STORAGE_KEY = "erudify-progress";
 
@@ -654,6 +655,8 @@ export default function ReadPage() {
             })}
           </div>
         </div>
+
+        <PomodoroTimer />
 
         <div className="mt-8">
           <button
