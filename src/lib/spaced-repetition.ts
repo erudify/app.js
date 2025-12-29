@@ -1,4 +1,4 @@
-import type { WordIntervalChange } from "./types";
+import type { WordIntervalChange } from "./domain";
 
 const MIN_INTERVAL_SECONDS = 30;
 const MAX_INTERVAL_SECONDS = 365 * 24 * 60 * 60;

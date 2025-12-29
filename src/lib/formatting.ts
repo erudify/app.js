@@ -1,0 +1,39 @@
+export function formatDuration(seconds: number): string {
+  const months = Math.floor(seconds / (30 * 24 * 60 * 60));
+  seconds %= 30 * 24 * 60 * 60;
+  const weeks = Math.floor(seconds / (7 * 24 * 60 * 60));
+  seconds %= 7 * 24 * 60 * 60;
+  const days = Math.floor(seconds / (24 * 60 * 60));
+  seconds %= 24 * 60 * 60;
+  const hours = Math.floor(seconds / (60 * 60));
+  seconds %= 60 * 60;
+  const minutes = Math.floor(seconds / 60);
+  seconds = Math.floor(seconds % 60);
+
+  const parts: string[] = [];
+
+  if (months > 0) parts.push(`${months}m`);
+  if (weeks > 0) parts.push(`${weeks}w`);
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}min`);
+  if (seconds > 0 && parts.length === 0) parts.push(`${seconds}sec`);
+
+  return parts.slice(0, 2).join(" ") || "0sec";
+}
+
+export function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleString();
+}
+
+export function formatMinutes(seconds: number): string {
+  if (seconds < 60) {
+    return "less than a minute";
+  }
+  const minutes = Math.ceil(seconds / 60);
+  return `${minutes} min`;
+}
+
+export function normalizePinyin(pinyin: string): string {
+  return pinyin.toLowerCase().replace(/\s+/g, "");
+}
