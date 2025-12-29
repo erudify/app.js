@@ -25,25 +25,19 @@ export function PomodoroIndicator({ state }: PomodoroIndicatorProps) {
     return null;
   }
 
+  const isBreak = state.isBreak;
+  const bgColor = isBreak 
+    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-400"
+    : "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-900/20 dark:text-green-400";
+  
+  const emoji = isBreak ? "☕" : "🎯";
+  const label = isBreak ? "Break" : "Focus";
+
   return (
-    <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-400">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="flex-shrink-0"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
+    <div className={`mb-4 flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm ${bgColor}`}>
+      <span className="text-lg">{emoji}</span>
       <span className="font-medium">
-        {state.isBreak ? "Break" : "Focus"}: {formatMinutes(state.timeLeft)} remaining
+        {label}: {formatMinutes(state.timeLeft)} remaining
       </span>
     </div>
   );

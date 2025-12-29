@@ -69,8 +69,7 @@ export function PomodoroTimer({ onStateChange }: PomodoroTimerProps) {
       intervalRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 0) {
-            // Timer completed
-            setIsRunning(false);
+            // Timer completed - auto-continue to next phase
             // Auto-switch between work and break
             const wasBreak = isBreakRef.current;
             setIsBreak(!wasBreak);
