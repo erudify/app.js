@@ -81,8 +81,7 @@ describe("spaced-repetition", () => {
     });
 
     it("uses actual elapsed time, not scheduled interval", () => {
-      const completedAt = 1000000;
-      const lastReviewed = 500000;
+      const lastReviewed = 0;
       const intervalSeconds = 3600;
 
       const state = {
@@ -91,11 +90,14 @@ describe("spaced-repetition", () => {
         consecutiveSuccesses: 2,
       };
 
+      const completedAt = lastReviewed + intervalSeconds * 2000;
+
       const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
 
       const actualElapsed = (completedAt - lastReviewed) / 1000;
       const expectedInterval = actualElapsed * 5;
 
+      expect(result.wasEarlyReview).toBe(false);
       expect(result.newInterval).toBe(Math.round(expectedInterval));
     });
 
@@ -116,8 +118,8 @@ describe("spaced-repetition", () => {
     });
 
     it("respects maximum interval of 1 year", () => {
-      const completedAt = 100000000;
-      const lastReviewed = 50000000;
+      const completedAt = 100000000000;
+      const lastReviewed = 50000000000;
       const intervalSeconds = 86400;
 
       const state = {
@@ -215,7 +217,7 @@ describe("spaced-repetition", () => {
   describe("integration test: review behavior", () => {
     it("early review gives 5% increase", () => {
       const completedAt = 1000000;
-      const lastReviewed = 990000;
+      const lastReviewed = 900000;
       const intervalSeconds = 1000;
 
       const state = {
@@ -235,8 +237,8 @@ describe("spaced-repetition", () => {
 
     it("good review gives 5x increase", () => {
       const completedAt = 1000000;
-      const lastReviewed = 950000;
-      const intervalSeconds = 1000;
+      const lastReviewed = 900000;
+      const intervalSeconds = 100;
 
       const state = {
         intervalSeconds,
