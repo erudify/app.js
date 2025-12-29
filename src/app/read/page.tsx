@@ -163,9 +163,11 @@ function normalizePinyin(pinyin: string): string {
 }
 
 /**
- * Format duration in short form (e.g., "1w 2d", "3h 15min", "30sec")
+ * Format duration in short form (e.g., "1m 2w", "1w 2d", "3h 15min", "30sec")
  */
 function formatDuration(seconds: number): string {
+  const months = Math.floor(seconds / (30 * 24 * 60 * 60));
+  seconds %= 30 * 24 * 60 * 60;
   const weeks = Math.floor(seconds / (7 * 24 * 60 * 60));
   seconds %= 7 * 24 * 60 * 60;
   const days = Math.floor(seconds / (24 * 60 * 60));
@@ -177,6 +179,7 @@ function formatDuration(seconds: number): string {
 
   const parts: string[] = [];
 
+  if (months > 0) parts.push(`${months}m`);
   if (weeks > 0) parts.push(`${weeks}w`);
   if (days > 0) parts.push(`${days}d`);
   if (hours > 0) parts.push(`${hours}h`);
@@ -573,60 +576,82 @@ export default function ReadPage() {
             Recent History
           </h3>
           <div className="space-y-3">
-            {getRecentHistory().map((item) => (
-              <div
-                key={item.completedAt}
-                className="history-item-animate rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-700"
-              >
-                <div className="mb-1 flex items-center gap-2">
-                  <span className={item.success ? "text-green-600" : "text-red-600"}>
-                    {item.success ? "✓" : "✗"}
-                  </span>
-                  <span className="font-medium text-zinc-900 dark:text-white">
-                    {item.chinese}
-                  </span>
-                </div>
-                <div className="mb-1 text-zinc-500 dark:text-zinc-400">
-                  {item.pinyin}
-                </div>
-                <div className="mb-2 text-zinc-600 dark:text-zinc-300">
-                  {item.english}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {item.wordChanges?.map((change, cidx) => {
-                    // Determine color: red for failure, gray for early review, green for normal increase
+            {getRecentHistory().map((item) => {
+              // Build a map of word -> change for colorization
+              const wordChangeMap = new Map<string, WordIntervalChange>();
+              item.wordChanges?.forEach((change) => {
+                wordChangeMap.set(change.word, change);
+              });
+
+              // Colorize Chinese text by matching words
+              const colorizedChinese: React.ReactNode[] = [];
+              let remaining = item.chinese;
+              let keyIdx = 0;
+
+              while (remaining.length > 0) {
+                let matched = false;
+
+                // Try to match words from wordChanges
+                for (const change of item.wordChanges ?? []) {
+                  if (remaining.startsWith(change.word)) {
+                    // Determine color based on change type
                     let colorClass: string;
                     if (change.wasFailure) {
-                      colorClass = "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+                      colorClass = "text-red-600 dark:text-red-400";
                     } else if (change.wasEarlyReview) {
-                      colorClass = "bg-zinc-100 text-zinc-600 dark:bg-zinc-700/50 dark:text-zinc-400";
+                      colorClass = "text-zinc-900 dark:text-white";
                     } else {
-                      colorClass = "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+                      colorClass = "text-green-600 dark:text-green-400";
                     }
 
-                    // Show + for increases, nothing for failures/resets
-                    const showPlus = !change.wasFailure && (
-                      change.oldIntervalSeconds === null ||
-                      change.newIntervalSeconds > change.oldIntervalSeconds
-                    );
-
-                    return (
+                    colorizedChinese.push(
                       <span
-                        key={cidx}
-                        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 ${colorClass}`}
-                        title={`Next review: ${formatDate(change.nextReview)}`}
+                        key={keyIdx++}
+                        className={colorClass}
+                        title={`Review in ${formatDuration(change.newIntervalSeconds)}`}
                       >
-                        <span>{change.word}</span>
-                        <span>
-                          {showPlus ? "+" : ""}
-                          {formatDuration(change.newIntervalSeconds)}
-                        </span>
+                        {change.word}
                       </span>
                     );
-                  })}
+                    remaining = remaining.slice(change.word.length);
+                    matched = true;
+                    break;
+                  }
+                }
+
+                // If no word matched, take the next character (punctuation)
+                if (!matched) {
+                  colorizedChinese.push(
+                    <span key={keyIdx++} className="text-zinc-900 dark:text-white">
+                      {remaining[0]}
+                    </span>
+                  );
+                  remaining = remaining.slice(1);
+                }
+              }
+
+              return (
+                <div
+                  key={item.completedAt}
+                  className="history-item-animate rounded-lg border border-zinc-200 p-3 text-xs dark:border-zinc-700"
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className={item.success ? "text-green-600" : "text-red-600"}>
+                      {item.success ? "✓" : "✗"}
+                    </span>
+                    <span className="font-medium">
+                      {colorizedChinese}
+                    </span>
+                  </div>
+                  <div className="mb-1 text-zinc-500 dark:text-zinc-400">
+                    {item.pinyin}
+                  </div>
+                  <div className="text-zinc-600 dark:text-zinc-300">
+                    {item.english}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
