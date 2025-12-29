@@ -572,6 +572,8 @@ export default function ReadPage() {
           </div>
         </div>
 
+        <PomodoroTimer />
+
         <div className="mt-8">
           <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Recent History
@@ -655,8 +657,6 @@ export default function ReadPage() {
             })}
           </div>
         </div>
-
-        <PomodoroTimer />
 
         <div className="mt-8">
           <button

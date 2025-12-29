@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const WORK_TIME = 25 * 60; // 25 minutes in seconds
+const WORK_TIME = 10 * 60; // 10 minutes in seconds
 const BREAK_TIME = 5 * 60; // 5 minutes in seconds
+const MAX_SESSIONS = 3; // Three sessions to complete
 
 /**
  * A simple, minimalistic Pomodoro timer component
@@ -13,6 +14,7 @@ export function PomodoroTimer() {
   const [isRunning, setIsRunning] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
   const [timeLeft, setTimeLeft] = useState(WORK_TIME);
+  const [completedSessions, setCompletedSessions] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isBreakRef = useRef(false);
 
@@ -39,6 +41,12 @@ export function PomodoroTimer() {
             // Auto-switch between work and break
             const wasBreak = isBreakRef.current;
             setIsBreak(!wasBreak);
+            
+            // If completing a work session (not a break), increment completed sessions
+            if (!wasBreak && completedSessions < MAX_SESSIONS) {
+              setCompletedSessions((count) => count + 1);
+            }
+            
             // Return the appropriate time for the next mode
             return wasBreak ? WORK_TIME : BREAK_TIME;
           }
@@ -58,7 +66,7 @@ export function PomodoroTimer() {
         intervalRef.current = null;
       }
     };
-  }, [isRunning]);
+  }, [isRunning, completedSessions]);
 
   const handleStartPause = () => {
     setIsRunning(!isRunning);
@@ -68,6 +76,7 @@ export function PomodoroTimer() {
     setIsRunning(false);
     setIsBreak(false);
     setTimeLeft(WORK_TIME);
+    setCompletedSessions(0);
   };
 
   const handleToggleMode = () => {
@@ -78,11 +87,29 @@ export function PomodoroTimer() {
 
   return (
     <div className="mt-8">
+      <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        Pomodoro Timer
+      </h3>
+      
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
       >
-        <span>Pomodoro Timer</span>
+        <div className="flex items-center gap-2">
+          <span>Sessions</span>
+          <div className="flex gap-1">
+            {[...Array(MAX_SESSIONS)].map((_, i) => (
+              <div
+                key={i}
+                className={`h-2.5 w-2.5 rounded-full border ${
+                  i < completedSessions
+                    ? "border-red-600 bg-red-600 dark:border-red-400 dark:bg-red-400"
+                    : "border-zinc-400 bg-transparent dark:border-zinc-500"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"
