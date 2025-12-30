@@ -258,15 +258,28 @@ export default function ReadPage() {
             </div>
 
             {showCompletion ? (
-              <div className="flex justify-end">
-                <button
-                  ref={continueButtonRef}
-                  type="button"
-                  onClick={handleContinue}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                >
-                  Continue
-                </button>
+              <div>
+                <ExerciseDisplay
+                  exercise={currentExercise}
+                  isComplete={true}
+                  currentInputIndex={0}
+                  inputValue=""
+                  showHint={false}
+                  hintedWordIndices={new Set()}
+                  inputRef={inputRef}
+                  onInputChange={() => {}}
+                  onInputKeyDown={() => {}}
+                />
+                <div className="flex justify-end mt-6">
+                  <button
+                    ref={continueButtonRef}
+                    type="button"
+                    onClick={handleContinue}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                  >
+                    Continue
+                  </button>
+                </div>
               </div>
             ) : (
               <ExerciseDisplay
