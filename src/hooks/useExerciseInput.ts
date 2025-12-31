@@ -44,6 +44,13 @@ export function useExerciseInput(
   );
   const inputRef = useRef<HTMLInputElement>(null!);
 
+  // Reset state when the number of segments changes (e.g., new exercise loaded)
+  useEffect(() => {
+    if (totalInputs !== state.totalInputs) {
+      setState(createInitialState(totalInputs));
+    }
+  }, [totalInputs, state.totalInputs]);
+
   // Keep track of callbacks in refs to avoid stale closures
   const onSegmentCompleteRef = useRef(onSegmentComplete);
   const onCompleteRef = useRef(onComplete);
