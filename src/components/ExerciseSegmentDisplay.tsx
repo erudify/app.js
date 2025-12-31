@@ -32,18 +32,20 @@ export function ExerciseSegmentDisplay({
 
   const pinyinWidth = `${segment.pinyin.length * 0.6 + 1}rem`;
 
+  // Show transliteration when hint is active (for current or completed segments)
+  const shouldShowTransliteration =
+    showHint && segment.transliteration && (state === "current" || state === "completed");
+
   return (
     <div className="flex flex-col items-center gap-1">
       <span
         className={`h-4 text-sm leading-4 ${
-          state === "current" && showHint && segment.transliteration
+          shouldShowTransliteration
             ? "text-zinc-500 dark:text-zinc-400"
             : "text-transparent"
         }`}
       >
-        {state === "current" && showHint && segment.transliteration
-          ? segment.transliteration
-          : "."}
+        {shouldShowTransliteration ? segment.transliteration : "."}
       </span>
       <span className="text-zinc-900 dark:text-white">{segment.chinese}</span>
       {state === "current" ? (

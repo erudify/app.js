@@ -108,6 +108,7 @@ export default function ReadPage() {
     handleKeyDown,
     handleChange,
     reset,
+    state: exerciseInputState,
   } = useExerciseInput({
     segments: currentExercise?.segments ?? [],
     onSegmentComplete: () => {},
@@ -292,6 +293,7 @@ export default function ReadPage() {
                 inputRef={inputRef}
                 onInputChange={handleChange}
                 onInputKeyDown={handleKeyDown}
+                state={exerciseInputState}
               />
             )}
           </div>
