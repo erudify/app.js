@@ -56,6 +56,7 @@ export function ExerciseSegmentDisplay({
           onChange={onInputChange}
           onKeyDown={onInputKeyDown}
           placeholder={showHint ? segment.pinyin : ""}
+          data-pinyin={segment.pinyin}
           style={{ width: pinyinWidth }}
           className="rounded border border-red-300 bg-red-50 px-2 py-1 text-center text-base text-zinc-900 placeholder-zinc-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-red-700 dark:bg-red-900/20 dark:text-white dark:placeholder-zinc-400"
           autoFocus
