@@ -1,6 +1,13 @@
 import { useState, useCallback, KeyboardEvent, ChangeEvent, useRef, useEffect } from "react";
-import { processPinyinInput, normalizePinyin } from "../lib/pinyin";
+import { processPinyinInput } from "../lib/pinyin";
 import type { ExerciseSegment } from "../lib/domain";
+import {
+  ExerciseInputState,
+  createInitialState,
+  requestHint,
+  updateInput,
+  resetState,
+} from "../lib/domain/exercise-input";
 
 export interface UseExerciseInputOptions {
   segments: ExerciseSegment[];
@@ -20,6 +27,8 @@ export interface UseExerciseInputReturn {
   handleChange: (e: ChangeEvent<HTMLInputElement>) => void;
   reset: () => void;
   completeExercise: () => void;
+  /** The underlying state machine state (for use with getSegmentDisplayState) */
+  state: ExerciseInputState;
 }
 
 export function useExerciseInput(
@@ -30,60 +39,63 @@ export function useExerciseInput(
   const inputSegments = segments.filter((seg) => seg.pinyin !== "");
   const totalInputs = inputSegments.length;
 
-  const [currentInputIndex, setCurrentInputIndex] = useState(0);
-  const [inputValue, setInputValue] = useState("");
-  const [showHint, setShowHint] = useState(false);
-  const [hintedWordIndices, setHintedWordIndices] = useState<Set<number>>(new Set());
+  const [state, setState] = useState<ExerciseInputState>(() =>
+    createInitialState(totalInputs)
+  );
   const inputRef = useRef<HTMLInputElement>(null!);
+
+  // Keep track of callbacks in refs to avoid stale closures
+  const onSegmentCompleteRef = useRef(onSegmentComplete);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onSegmentCompleteRef.current = onSegmentComplete;
+    onCompleteRef.current = onComplete;
+  }, [onSegmentComplete, onComplete]);
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, [currentInputIndex]);
+  }, [state.currentInputIndex]);
 
   const checkAndAdvance = useCallback(
     (newValue: string) => {
-      const currentSegment = inputSegments[currentInputIndex];
-      if (
-        currentSegment &&
-        normalizePinyin(newValue) === normalizePinyin(currentSegment.pinyin)
-      ) {
-        if (currentInputIndex < totalInputs - 1) {
-          setCurrentInputIndex((prev) => prev + 1);
-          setInputValue("");
-          setShowHint(false);
-          onSegmentComplete?.(currentInputIndex);
-        } else {
-          onComplete?.(hintedWordIndices);
-        }
+      const currentSegment = inputSegments[state.currentInputIndex];
+      if (!currentSegment) return;
+
+      const result = updateInput(state, newValue, currentSegment.pinyin);
+      setState(result.state);
+
+      if (result.segmentCompleted !== undefined) {
+        onSegmentCompleteRef.current?.(result.segmentCompleted);
+      }
+      if (result.exerciseCompleted) {
+        onCompleteRef.current?.(result.state.hintedIndices);
       }
     },
-    [currentInputIndex, inputSegments, totalInputs, hintedWordIndices, onSegmentComplete, onComplete]
+    [state, inputSegments]
   );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        if (!showHint && currentInputIndex < inputSegments.length) {
-          setInputValue("");
-          setShowHint(true);
-          setHintedWordIndices((prev) => new Set(prev).add(currentInputIndex));
-        }
+        setState(requestHint(state));
         return;
       }
 
       if (/^[0-4]$/.test(e.key)) {
         e.preventDefault();
         const input = e.currentTarget;
-        const selectionStart = input.selectionStart ?? inputValue.length;
+        const selectionStart = input.selectionStart ?? state.inputValue.length;
 
         const { newText, newCursorPos } = processPinyinInput(
-          inputValue,
+          state.inputValue,
           selectionStart,
           parseInt(e.key, 10)
         );
 
-        setInputValue(newText);
+        // First update the input value in state
+        setState((prev) => ({ ...prev, inputValue: newText }));
+        // Then check if this completes the segment
         checkAndAdvance(newText);
 
         requestAnimationFrame(() => {
@@ -91,40 +103,47 @@ export function useExerciseInput(
         });
       }
     },
-    [inputValue, checkAndAdvance, showHint, currentInputIndex, inputSegments]
+    [state, checkAndAdvance]
   );
 
   const handleChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
-      setInputValue(newValue);
+      setState((prev) => ({ ...prev, inputValue: newValue }));
       checkAndAdvance(newValue);
     },
     [checkAndAdvance]
   );
 
   const reset = useCallback(() => {
-    setCurrentInputIndex(0);
-    setInputValue("");
-    setShowHint(false);
-    setHintedWordIndices(new Set());
-  }, []);
+    setState(resetState(totalInputs));
+  }, [totalInputs]);
 
   const completeExercise = useCallback(() => {
-    onComplete?.(hintedWordIndices);
-  }, [hintedWordIndices, onComplete]);
+    onCompleteRef.current?.(state.hintedIndices);
+  }, [state.hintedIndices]);
+
+  // For backward compatibility, expose individual state properties
+  const setInputValue = useCallback((value: string) => {
+    setState((prev) => ({ ...prev, inputValue: value }));
+  }, []);
+
+  const setShowHint = useCallback((show: boolean) => {
+    setState((prev) => ({ ...prev, showHint: show }));
+  }, []);
 
   return {
-    inputValue,
+    inputValue: state.inputValue,
     setInputValue,
-    currentInputIndex,
-    showHint,
+    currentInputIndex: state.currentInputIndex,
+    showHint: state.showHint,
     setShowHint,
-    hintedWordIndices,
+    hintedWordIndices: state.hintedIndices,
     inputRef: inputRef as React.RefObject<HTMLInputElement>,
     handleKeyDown,
     handleChange,
     reset,
     completeExercise,
+    state,
   };
 }

@@ -2,6 +2,8 @@
 
 import { ExerciseSegmentDisplay } from "./ExerciseSegmentDisplay";
 import type { Exercise } from "@/lib/domain/exercise";
+import type { ExerciseInputState } from "@/lib/domain/exercise-input";
+import { getSegmentDisplayState } from "@/lib/domain/exercise-input";
 
 interface ExerciseDisplayProps {
   exercise: Exercise;
@@ -13,6 +15,8 @@ interface ExerciseDisplayProps {
   inputRef: React.RefObject<HTMLInputElement>;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** The state machine state for computing segment display states */
+  state?: ExerciseInputState;
 }
 
 export function ExerciseDisplay({
@@ -25,12 +29,27 @@ export function ExerciseDisplay({
   inputRef,
   onInputChange,
   onInputKeyDown,
+  state,
 }: ExerciseDisplayProps) {
   if (isComplete) {
     return <CompletedExercise exercise={exercise} />;
   }
 
-  return <InputExercise {...{ exercise, currentInputIndex, inputValue, showHint, hintedWordIndices, inputRef, onInputChange, onInputKeyDown }} />;
+  return (
+    <InputExercise
+      {...{
+        exercise,
+        currentInputIndex,
+        inputValue,
+        showHint,
+        hintedWordIndices,
+        inputRef,
+        onInputChange,
+        onInputKeyDown,
+        state,
+      }}
+    />
+  );
 }
 
 interface CompletedExerciseProps {
@@ -89,6 +108,7 @@ interface InputExerciseProps {
   inputRef: React.RefObject<HTMLInputElement>;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  state?: ExerciseInputState;
 }
 
 function InputExercise({
@@ -100,6 +120,7 @@ function InputExercise({
   inputRef,
   onInputChange,
   onInputKeyDown,
+  state,
 }: InputExerciseProps) {
   let inputSegmentIndex = 0;
 
@@ -118,23 +139,40 @@ function InputExercise({
         }
 
         const segmentInputIndex = inputSegmentIndex++;
-        const state =
-          segmentInputIndex < currentInputIndex
-            ? ("completed" as const)
-            : segmentInputIndex === currentInputIndex
-            ? ("current" as const)
-            : ("pending" as const);
+
+        // Use the state machine to compute display state if available,
+        // otherwise fall back to legacy computation
+        let visualState: "pending" | "current" | "completed";
+        let segmentShowHint: boolean;
+
+        if (state) {
+          const displayState = getSegmentDisplayState(state, segmentInputIndex);
+          visualState = displayState.visualState;
+          segmentShowHint = displayState.showHint;
+        } else {
+          // Legacy fallback for backward compatibility
+          visualState =
+            segmentInputIndex < currentInputIndex
+              ? "completed"
+              : segmentInputIndex === currentInputIndex
+              ? "current"
+              : "pending";
+          segmentShowHint =
+            visualState === "current"
+              ? showHint
+              : hintedWordIndices.has(segmentInputIndex);
+        }
 
         return (
           <ExerciseSegmentDisplay
             key={idx}
             segment={segment}
-            state={state}
-            inputRef={state === "current" ? inputRef : undefined}
-            inputValue={state === "current" ? inputValue : undefined}
-            showHint={state === "current" && showHint}
-            onInputChange={state === "current" ? onInputChange : undefined}
-            onInputKeyDown={state === "current" ? onInputKeyDown : undefined}
+            state={visualState}
+            inputRef={visualState === "current" ? inputRef : undefined}
+            inputValue={visualState === "current" ? inputValue : undefined}
+            showHint={segmentShowHint}
+            onInputChange={visualState === "current" ? onInputChange : undefined}
+            onInputKeyDown={visualState === "current" ? onInputKeyDown : undefined}
           />
         );
       })}
