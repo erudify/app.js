@@ -61,8 +61,10 @@ export function calculateNewInterval(
   let newInterval: number;
 
   if (isEarly) {
+    // Early review: apply small multiplier but never decrease below current interval
+    const calculatedInterval = actualElapsedSeconds * config.earlyReviewMultiplier;
     newInterval = clampInterval(
-      actualElapsedSeconds * config.earlyReviewMultiplier,
+      Math.max(calculatedInterval, state.intervalSeconds),
       config
     );
   } else {

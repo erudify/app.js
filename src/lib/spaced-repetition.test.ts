@@ -36,10 +36,13 @@ describe("spaced-repetition", () => {
   });
 
   describe("calculateNewInterval - early review", () => {
-    it("applies 1.05x multiplier to actual elapsed time", () => {
-      const completedAt = 1000000;
-      const lastReviewed = 900000;
+    it("applies 1.05x multiplier when calculated interval exceeds current interval", () => {
+      // Setup: interval is 100 seconds, we review after 200 seconds (early since 200 < 100*1000ms)
+      // Wait, that's not early. Let's fix: interval is 1000 seconds, we review after 960 seconds
+      // 960 * 1.05 = 1008, which exceeds 1000, so we should get 1008
+      const lastReviewed = 0;
       const intervalSeconds = 1000;
+      const completedAt = 960 * 1000; // 960 seconds later (early, since < 1000 seconds)
 
       const state = {
         intervalSeconds,
@@ -49,12 +52,55 @@ describe("spaced-repetition", () => {
 
       const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
 
-      const actualElapsed = (completedAt - lastReviewed) / 1000;
-      const expectedInterval = actualElapsed * 1.05;
+      const actualElapsed = completedAt / 1000; // 960 seconds
+      const calculatedInterval = actualElapsed * 1.05; // 1008
 
-      expect(result.newInterval).toBe(Math.round(expectedInterval));
       expect(result.wasEarlyReview).toBe(true);
+      expect(result.newInterval).toBe(Math.round(calculatedInterval)); // 1008 > 1000, so use 1008
       expect(result.consecutiveSuccesses).toBe(3);
+    });
+
+    it("preserves current interval when calculated interval is smaller", () => {
+      // Setup: interval is 1000 seconds, but only 100 seconds elapsed
+      // 100 * 1.05 = 105, which is less than 1000, so keep 1000
+      const lastReviewed = 0;
+      const intervalSeconds = 1000;
+      const completedAt = 100 * 1000; // Only 100 seconds later
+
+      const state = {
+        intervalSeconds,
+        lastReviewed,
+        consecutiveSuccesses: 2,
+      };
+
+      const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
+
+      expect(result.wasEarlyReview).toBe(true);
+      expect(result.newInterval).toBe(intervalSeconds); // Keep current interval
+      expect(result.consecutiveSuccesses).toBe(3);
+    });
+
+    it("never decreases interval on early review (regression test)", () => {
+      // Scenario: word answered correctly first time gets 1 week interval,
+      // then appears again in follow-up exercise 5 seconds later.
+      // The interval should NOT reset to 30 seconds.
+      const firstReviewTime = 1000000;
+      const oneWeekInSeconds = 7 * 24 * 60 * 60;
+
+      const state = {
+        intervalSeconds: oneWeekInSeconds,
+        lastReviewed: firstReviewTime,
+        consecutiveSuccesses: 1,
+      };
+
+      // Word appears again 5 seconds later in a follow-up exercise
+      const secondReviewTime = firstReviewTime + 5000;
+      const result = calculateNewInterval(state, secondReviewTime, DEFAULT_CONFIG);
+
+      expect(result.wasEarlyReview).toBe(true);
+      // The interval should remain at 1 week, not drop to 30 seconds
+      expect(result.newInterval).toBe(oneWeekInSeconds);
+      expect(result.consecutiveSuccesses).toBe(2);
     });
   });
 
@@ -101,10 +147,11 @@ describe("spaced-repetition", () => {
       expect(result.newInterval).toBe(Math.round(expectedInterval));
     });
 
-    it("respects minimum interval of 30 seconds", () => {
-      const completedAt = 1000000;
-      const lastReviewed = 999999;
-      const intervalSeconds = 60;
+    it("respects minimum interval of 30 seconds for good review", () => {
+      // Very short elapsed time on a good review (not early) should clamp to 30
+      const lastReviewed = 0;
+      const intervalSeconds = 1; // 1 second interval
+      const completedAt = 2000; // 2 seconds later (past the 1 second interval, so not early)
 
       const state = {
         intervalSeconds,
@@ -114,6 +161,8 @@ describe("spaced-repetition", () => {
 
       const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
 
+      // 2 seconds * 5 = 10 seconds, clamped to minimum 30
+      expect(result.wasEarlyReview).toBe(false);
       expect(result.newInterval).toBe(30);
     });
 
@@ -215,10 +264,10 @@ describe("spaced-repetition", () => {
   });
 
   describe("integration test: review behavior", () => {
-    it("early review gives 5% increase", () => {
+    it("early review preserves interval when elapsed time is short", () => {
       const completedAt = 1000000;
       const lastReviewed = 900000;
-      const intervalSeconds = 1000;
+      const intervalSeconds = 1000; // Current interval is 1000 seconds
 
       const state = {
         intervalSeconds,
@@ -228,11 +277,28 @@ describe("spaced-repetition", () => {
 
       const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
 
-      const actualElapsed = (completedAt - lastReviewed) / 1000;
-      const expectedIncrease = actualElapsed * 1.05;
-
+      // 100 seconds elapsed * 1.05 = 105, but current interval is 1000
+      // So we keep 1000
       expect(result.wasEarlyReview).toBe(true);
-      expect(result.newInterval).toBe(Math.round(expectedIncrease));
+      expect(result.newInterval).toBe(intervalSeconds);
+    });
+
+    it("early review increases interval when elapsed time * multiplier exceeds current", () => {
+      const lastReviewed = 0;
+      const intervalSeconds = 100; // Short interval
+      const completedAt = 99 * 1000; // 99 seconds (just before the 100 second mark)
+
+      const state = {
+        intervalSeconds,
+        lastReviewed,
+        consecutiveSuccesses: 2,
+      };
+
+      const result = calculateNewInterval(state, completedAt, DEFAULT_CONFIG);
+
+      // 99 * 1.05 = 103.95, which exceeds 100, so use 103.95
+      expect(result.wasEarlyReview).toBe(true);
+      expect(result.newInterval).toBe(99 * 1.05);
     });
 
     it("good review gives 5x increase", () => {
