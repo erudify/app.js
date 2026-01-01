@@ -344,13 +344,11 @@ export function simulateTyping(input: string): string {
       if (char === "e" || char === "E") {
         if (cursorPos >= 3) {
           const prevTwo = text.slice(cursorPos - 3, cursorPos - 1).toLowerCase();
-          const consonant = text[cursorPos - 3];
           const vowel = text[cursorPos - 2];
           
-          if ((prevTwo === "nu" || prevTwo === "lu") && 
-              (consonant === "n" || consonant === "N" || consonant === "l" || consonant === "L")) {
+          if (prevTwo === "nu" || prevTwo === "lu") {
             // Convert 'u' to 'ü'
-            const isUpperU = vowel === vowel.toUpperCase();
+            const isUpperU = vowel === "U";
             text =
               text.slice(0, cursorPos - 2) +
               (isUpperU ? "Ü" : "ü") +
