@@ -15,7 +15,10 @@ export const tonedVowelMap: Record<string, { base: string; tone: number }> = {};
 for (const [base, tones] of Object.entries(toneMap)) {
   for (let tone = 1; tone <= 4; tone++) { // Start from 1, not 0
     const toned = tones[tone];
-    tonedVowelMap[toned] = { base: base === "v" ? "ü" : base, tone };
+    // Defensive check: only add if different from base (shouldn't happen for tones 1-4)
+    if (toned && toned !== base) {
+      tonedVowelMap[toned] = { base: base === "v" ? "ü" : base, tone };
+    }
   }
 }
 
@@ -344,10 +347,10 @@ export function simulateTyping(input: string): string {
       if (char === "e" || char === "E") {
         if (cursorPos >= 3) {
           const prevTwo = text.slice(cursorPos - 3, cursorPos - 1).toLowerCase();
-          const vowel = text[cursorPos - 2];
           
           if (prevTwo === "nu" || prevTwo === "lu") {
-            // Convert 'u' to 'ü'
+            const vowel = text[cursorPos - 2];
+            // Convert 'u' to 'ü' (preserve case)
             const isUpperU = vowel === "U";
             text =
               text.slice(0, cursorPos - 2) +
