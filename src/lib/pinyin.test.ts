@@ -172,7 +172,7 @@ describe("simulateTyping", () => {
 
   it("handles nüer with tones (ue after n/l treated as üe)", () => {
     // After n or l, 'ue' should be treated as 'üe'
-    expect(simulateTyping("nuer32")).toBe("nǚér");
-    expect(simulateTyping("lue4")).toBe("lüè");
+    expect(simulateTyping("nver32")).toBe("nǚér");
+    expect(simulateTyping("lve4")).toBe("lüè");
   });
 });
