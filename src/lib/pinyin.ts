@@ -13,9 +13,10 @@ export const toneMap: Record<string, string[]> = {
 // All toned vowels mapped back to their base form and tone number
 export const tonedVowelMap: Record<string, { base: string; tone: number }> = {};
 for (const [base, tones] of Object.entries(toneMap)) {
-  for (let tone = 0; tone <= 4; tone++) {
+  for (let tone = 1; tone <= 4; tone++) { // Start from 1, not 0
     const toned = tones[tone];
-    if (toned !== base) {
+    // Defensive check: only add if different from base (shouldn't happen for tones 1-4)
+    if (toned && toned !== base) {
       tonedVowelMap[toned] = { base: base === "v" ? "ü" : base, tone };
     }
   }
@@ -145,6 +146,9 @@ function removeToneFromSyllable(syllable: string): string {
 function parseSyllableEnd(sequence: string, startPos: number): number {
   let i = startPos;
 
+  // Track the initial consonant(s)
+  const consonantStart = i;
+  
   // Skip leading consonants
   while (i < sequence.length && !isVowel(sequence[i])) {
     i++;
@@ -154,8 +158,26 @@ function parseSyllableEnd(sequence: string, startPos: number): number {
     return i;
   }
 
+  const initialConsonant = sequence.slice(consonantStart, i).toLowerCase();
+
   // Collect vowels
+  const vowelStart = i;
   while (i < sequence.length && isVowel(sequence[i])) {
+    // Special rule: after 'n' + 'ü', don't continue to 'e' (nü|e, not nüe)
+    // But after 'l' + 'ü', DO continue to 'e' (lüe is valid)
+    if (i > vowelStart) {
+      const prevChar = sequence[i - 1].toLowerCase();
+      const currChar = sequence[i].toLowerCase();
+      
+      if (getBaseVowel(prevChar) === "ü" && currChar === "e") {
+        // Check what consonant precedes ü
+        if (initialConsonant === "n") {
+          // nü + e = two syllables (nü|e)
+          break;
+        }
+        // For 'l' or other consonants, lüe is valid, so continue
+      }
+    }
     i++;
   }
 
@@ -310,6 +332,33 @@ export function simulateTyping(input: string): string {
       // Regular character - insert at cursor
       text = text.slice(0, cursorPos) + char + text.slice(cursorPos);
       cursorPos++;
+
+      // Auto-convert 'v' to 'ü' after insertion
+      if (char === "v" || char === "V") {
+        const isUpper = char === "V";
+        text =
+          text.slice(0, cursorPos - 1) +
+          (isUpper ? "Ü" : "ü") +
+          text.slice(cursorPos);
+      }
+
+      // Handle 'nue' and 'lue' conversion to 'nüe' and 'lüe'
+      // After typing 'e', check if preceded by 'nu' or 'lu' and convert 'u' to 'ü'
+      if (char === "e" || char === "E") {
+        if (cursorPos >= 3) {
+          const prevTwo = text.slice(cursorPos - 3, cursorPos - 1).toLowerCase();
+          
+          if (prevTwo === "nu" || prevTwo === "lu") {
+            const vowel = text[cursorPos - 2];
+            // Convert 'u' to 'ü' (preserve case)
+            const isUpperU = vowel === "U";
+            text =
+              text.slice(0, cursorPos - 2) +
+              (isUpperU ? "Ü" : "ü") +
+              text.slice(cursorPos - 1);
+          }
+        }
+      }
     }
   }
 

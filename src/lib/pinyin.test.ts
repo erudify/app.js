@@ -163,4 +163,16 @@ describe("simulateTyping", () => {
     expect(simulateTyping("ni3hao31")).toBe("nǐhāo");
     expect(simulateTyping("ni3hao312")).toBe("nǐháo");
   });
+
+  it("converts v to ü without tone", () => {
+    // v should be converted to ü even without a tone number
+    expect(simulateTyping("nv")).toBe("nü");
+    expect(simulateTyping("lv")).toBe("lü");
+  });
+
+  it("handles nüer with tones (ue after n/l treated as üe)", () => {
+    // After n or l, 'ue' should be treated as 'üe'
+    expect(simulateTyping("nver32")).toBe("nǚér");
+    expect(simulateTyping("lve4")).toBe("lüè");
+  });
 });
