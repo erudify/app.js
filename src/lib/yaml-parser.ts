@@ -7,61 +7,106 @@ export function parseExercises(yaml: string): Exercise[] {
   const exercises: Exercise[] = [];
   const lines = yaml.split("\n");
 
-  let currentExercise: Exercise | null = null;
+  let currentExercise: { english?: string; segments: Exercise["segments"] } | null = null;
   let currentSegment: { chinese?: string; pinyin?: string; transliteration?: string } | null = null;
+  let inChunks = false;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  const normalizeValue = (value: string): string => value.trim().replace(/^['"]|['"]$/g, "");
 
-    if (trimmed.startsWith("- english:")) {
-      if (currentExercise) {
-        if (currentSegment && currentSegment.chinese) {
-          currentExercise.segments.push({
-            chinese: currentSegment.chinese,
-            pinyin: currentSegment.pinyin || "",
-            transliteration: currentSegment.transliteration,
-          });
-          currentSegment = null;
-        }
-        exercises.push(currentExercise);
-      }
-      currentExercise = { segments: [], english: trimmed.slice(10).trim() };
-      currentSegment = null;
-    } else if (trimmed === "chunks:") {
-    } else if (trimmed.startsWith("- chinese:")) {
-      if (currentSegment && currentSegment.chinese && currentExercise) {
-        currentExercise.segments.push({
-          chinese: currentSegment.chinese,
-          pinyin: currentSegment.pinyin || "",
-          transliteration: currentSegment.transliteration,
-        });
-      }
-      currentSegment = { chinese: trimmed.slice(10).trim() };
-    } else if (trimmed.startsWith("pinyin:")) {
-      if (currentSegment) {
-        let p = trimmed.slice(7).trim().replace(/'/g, "");
-        if (/^[.,!?;:，。？！：、]$/.test(p)) {
-          p = "";
-        }
-        currentSegment.pinyin = p;
-      }
-    } else if (trimmed.startsWith("transliteration:")) {
-      if (currentSegment) {
-        currentSegment.transliteration = trimmed.slice(16).trim().replace(/'/g, "");
-      }
+  const finalizeSegment = (): void => {
+    if (!currentExercise || !currentSegment || !currentSegment.chinese) {
+      return;
     }
-  }
 
-  if (currentExercise && currentSegment && currentSegment.chinese) {
     currentExercise.segments.push({
       chinese: currentSegment.chinese,
       pinyin: currentSegment.pinyin || "",
       transliteration: currentSegment.transliteration,
     });
+    currentSegment = null;
+  };
+
+  const finalizeExercise = (): void => {
+    if (!currentExercise) {
+      return;
+    }
+
+    finalizeSegment();
+
+    if (currentExercise.english) {
+      exercises.push({
+        english: currentExercise.english,
+        segments: currentExercise.segments,
+      });
+    }
+
+    currentExercise = null;
+    inChunks = false;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const indent = line.length - line.trimStart().length;
+
+    if (trimmed === "" || trimmed === "---") {
+      continue;
+    }
+
+    if (indent === 0 && trimmed.startsWith("- ")) {
+      finalizeExercise();
+      currentExercise = { segments: [] };
+      currentSegment = null;
+      inChunks = false;
+
+      if (trimmed.startsWith("- english:")) {
+        currentExercise.english = normalizeValue(trimmed.slice(10));
+      }
+      continue;
+    }
+
+    if (!currentExercise) {
+      continue;
+    }
+
+    if (indent === 2 && trimmed === "chunks:") {
+      inChunks = true;
+      continue;
+    }
+
+    if (indent === 2 && trimmed.startsWith("english:")) {
+      currentExercise.english = normalizeValue(trimmed.slice(8));
+      continue;
+    }
+
+    if (!inChunks) {
+      continue;
+    }
+
+    if (indent === 2 && trimmed.startsWith("- chinese:")) {
+      finalizeSegment();
+      currentSegment = { chinese: normalizeValue(trimmed.slice(10)) };
+      continue;
+    }
+
+    if (!currentSegment) {
+      continue;
+    }
+
+    if (indent === 4 && trimmed.startsWith("pinyin:")) {
+      let pinyin = normalizeValue(trimmed.slice(7));
+      if (/^[.,!?;:，。？！：、]$/.test(pinyin)) {
+        pinyin = "";
+      }
+      currentSegment.pinyin = pinyin;
+      continue;
+    }
+
+    if (indent === 4 && trimmed.startsWith("transliteration:")) {
+      currentSegment.transliteration = normalizeValue(trimmed.slice(16));
+    }
   }
-  if (currentExercise) {
-    exercises.push(currentExercise);
-  }
+
+  finalizeExercise();
 
   return exercises;
 }
