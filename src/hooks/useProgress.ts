@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { loadProgress, saveProgress, clearProgress as clearProgressStorage } from "../lib/storage";
 import type { StudentProgress } from "../lib/domain";
 
@@ -15,19 +15,19 @@ export function useProgress(): UseProgressReturn {
     saveProgress(progress);
   }, [progress]);
 
-  const updateProgress = (
+  const updateProgress = useCallback((
     update: Partial<StudentProgress> | ((prev: StudentProgress) => StudentProgress)
   ) => {
     setProgress((prev) => {
       const next = typeof update === "function" ? update(prev) : { ...prev, ...update };
       return next;
     });
-  };
+  }, []);
 
-  const clearProgress = () => {
+  const clearProgress = useCallback(() => {
     clearProgressStorage();
     setProgress(loadProgress());
-  };
+  }, []);
 
   return { progress, updateProgress, clearProgress };
 }

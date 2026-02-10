@@ -4,6 +4,6 @@ export type {
   WordProgress,
   WordIntervalChange,
   ExerciseHistory,
+  DailyMetricsPoint,
   StudentProgress,
 } from "./domain";
-
