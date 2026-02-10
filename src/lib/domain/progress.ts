@@ -1,5 +1,3 @@
-import type { Exercise } from "./exercise";
-
 export interface WordProgress {
   word: string;
   lastReviewed: number;
@@ -32,4 +30,11 @@ export interface StudentProgress {
   words: Record<string, WordProgress>;
   history: ExerciseHistory[];
   exerciseLastSeen: Record<number, number>;
+  dailyMetricsHistory: Record<string, DailyMetricsPoint>;
+}
+
+export interface DailyMetricsPoint {
+  dateKey: string;
+  knownWords: number;
+  memoryStrength: number;
 }

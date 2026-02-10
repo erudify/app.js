@@ -8,6 +8,7 @@ const EMPTY_PROGRESS: StudentProgress = {
   words: {},
   history: [],
   exerciseLastSeen: {},
+  dailyMetricsHistory: {},
 };
 
 /**
@@ -34,6 +35,7 @@ export function loadProgress(): StudentProgress {
         words: parsed.words || {},
         history: parsed.history || [],
         exerciseLastSeen,
+        dailyMetricsHistory: parsed.dailyMetricsHistory || {},
       };
     }
   } catch (error) {
@@ -54,6 +56,7 @@ export function saveProgress(progress: StudentProgress): void {
       words: progress.words,
       history: progress.history,
       exerciseLastSeen: progress.exerciseLastSeen,
+      dailyMetricsHistory: progress.dailyMetricsHistory,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
   } catch (error) {

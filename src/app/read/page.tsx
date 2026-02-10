@@ -14,11 +14,12 @@ import {
   selectNextExercise,
 } from "@/lib/exercises";
 import { PomodoroIndicator } from "@/components/PomodoroIndicator";
-import { PomodoroTimer } from "@/components/PomodoroTimer";
 import { Sidebar } from "@/components/Sidebar";
 import { ExerciseDisplay } from "@/components/ExerciseDisplay";
 import { InstructionsPanel } from "@/components/InstructionsPanel";
 import { DebugModal } from "@/components/DebugModal";
+import { MetricsHistoryModal } from "@/components/MetricsHistoryModal";
+import { upsertTodayAndFillMissingDays } from "@/lib/progress-metrics";
 import type { PomodoroState } from "@/components/PomodoroTimer";
 
 export default function ReadPage() {
@@ -27,6 +28,7 @@ export default function ReadPage() {
   const [displayedExerciseIndex, setDisplayedExerciseIndex] = useState<number | null>(null);
   const [showCompletion, setShowCompletion] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [showMetricsHistory, setShowMetricsHistory] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
     isRunning: false,
@@ -86,6 +88,10 @@ export default function ReadPage() {
 
     return () => clearTimeout(timer);
   }, [stats.nextReviewTime, currentTime]);
+
+  useEffect(() => {
+    updateProgress((prev) => upsertTodayAndFillMissingDays(prev, Date.now()));
+  }, [progress.words, updateProgress]);
 
   const advanceToNextExercise = useCallback(
     (updatedProgress = progress) => {
@@ -222,6 +228,7 @@ export default function ReadPage() {
         stats={stats}
         onClearProgress={handleClearProgress}
         onPomodoroStateChange={setPomodoroState}
+        onOpenMetricsHistory={() => setShowMetricsHistory(true)}
       />
 
       <main className="flex-1 p-8">
@@ -308,6 +315,12 @@ export default function ReadPage() {
         targetWord={targetWord}
         currentIndex={currentIndex}
         candidates={debugCandidates}
+      />
+
+      <MetricsHistoryModal
+        show={showMetricsHistory}
+        onClose={() => setShowMetricsHistory(false)}
+        history={progress.dailyMetricsHistory}
       />
     </div>
   );
