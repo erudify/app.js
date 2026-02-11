@@ -1,20 +1,14 @@
-import type { Exercise, StudentProgress, WordIntervalChange } from "./domain";
+import type {
+  Exercise,
+  ScoredExercise,
+  StudentProgress,
+  WordIntervalChange,
+} from "./domain";
 import {
   updateWordStateSuccess,
   updateWordStateFailure,
   type WordState,
 } from "./spaced-repetition";
-
-export interface ScoredExercise {
-  exercise: Exercise;
-  index: number;
-  score: number;
-  breakdown: {
-    wordScores: Record<string, number>;
-    totalWordScore: number;
-    lastSeen: number;
-  };
-}
 
 /**
  * Get all words from an exercise (excluding punctuation - segments without pinyin)
@@ -62,7 +56,12 @@ export function selectNextExercise(
     const targetWord = wordsNeedingReview[0].word;
 
     // Use the new helper to score candidates
-    const scoredExercises = getExerciseCandidates(targetWord, exercises, progress);
+    const scoredExercises = getExerciseCandidates(
+      targetWord,
+      exercises,
+      progress,
+      orderedWordList
+    );
 
     if (scoredExercises.length === 0) {
       // This word is in progress but no exercises contain it?
@@ -84,9 +83,13 @@ export function selectNextExercise(
 export function getExerciseCandidates(
   word: string,
   exercises: Exercise[],
-  progress: StudentProgress
+  progress: StudentProgress,
+  orderedWordList: string[] = []
 ): ScoredExercise[] {
   const now = Date.now();
+  const orderedWordIndex = new Map<string, number>(
+    orderedWordList.map((orderedWord, index) => [orderedWord, index])
+  );
 
   const candidateExercises = exercises
     .map((ex, idx) => ({ exercise: ex, index: idx }))
@@ -94,42 +97,83 @@ export function getExerciseCandidates(
 
   const scored = candidateExercises.map(({ exercise, index }) => {
     const exerciseWords = getExerciseWords(exercise);
-    const wordScores: Record<string, number> = {};
-    let totalWordScore = 0;
+    const wordStatuses: Record<string, "known" | "review" | "unknown"> = {};
+    const orderedWordIndices: Record<string, number | null> = {};
+    let wordsNotInOrderedList = 0;
+    let unknownOrReviewWordCount = 0;
+    let largestOrderedWordIndex = -1;
 
     for (const w of exerciseWords) {
       const wp = progress.words[w];
-      let wordScore = 0;
-      if (!wp) {
-        // New word: high score to avoid introducing too many at once
-        wordScore = 5;
-      } else if (wp.nextReview <= now) {
-        // Due for review: treating as safe context (0 score)
-        wordScore = 0;
+      const isKnownWord = Boolean(wp && wp.nextReview > now);
+      const wordListIndex = orderedWordIndex.get(w);
+
+      if (isKnownWord) {
+        wordStatuses[w] = "known";
+        orderedWordIndices[w] = wordListIndex ?? null;
+        continue;
       }
-      wordScores[w] = wordScore;
-      totalWordScore += wordScore;
+
+      if (!wp) {
+        wordStatuses[w] = "unknown";
+      } else {
+        wordStatuses[w] = "review";
+      }
+
+      orderedWordIndices[w] = wordListIndex ?? null;
+      unknownOrReviewWordCount += 1;
+
+      if (wordListIndex === undefined) {
+        wordsNotInOrderedList += 1;
+      } else {
+        largestOrderedWordIndex = Math.max(largestOrderedWordIndex, wordListIndex);
+      }
     }
 
+    const sentence = exercise.segments.map((seg) => seg.chinese).join("");
+    const chineseCharacterCount =
+      sentence.match(/\p{Script=Han}/gu)?.length ?? 0;
     const lastSeen = progress.exerciseLastSeen[index] || 0;
 
     return {
       exercise,
       index,
-      score: totalWordScore,
+      score: {
+        wordsNotInOrderedList,
+        unknownOrReviewWordCount,
+        largestOrderedWordIndex,
+        chineseCharacterCount,
+      },
       breakdown: {
-        wordScores,
-        totalWordScore,
+        wordStatuses,
+        orderedWordIndices,
+        wordsNotInOrderedList,
+        unknownOrReviewWordCount,
+        largestOrderedWordIndex,
+        chineseCharacterCount,
         lastSeen,
       },
     };
   });
 
-  // Sort by word score (lowest first), then by last seen date (oldest/never first)
+  // Sort by readability for beginners using a lexicographic score tuple.
   return scored.sort((a, b) => {
-    if (a.score !== b.score) {
-      return a.score - b.score;
+    if (a.score.wordsNotInOrderedList !== b.score.wordsNotInOrderedList) {
+      return a.score.wordsNotInOrderedList - b.score.wordsNotInOrderedList;
     }
+
+    if (a.score.unknownOrReviewWordCount !== b.score.unknownOrReviewWordCount) {
+      return a.score.unknownOrReviewWordCount - b.score.unknownOrReviewWordCount;
+    }
+
+    if (a.score.largestOrderedWordIndex !== b.score.largestOrderedWordIndex) {
+      return a.score.largestOrderedWordIndex - b.score.largestOrderedWordIndex;
+    }
+
+    if (a.score.chineseCharacterCount !== b.score.chineseCharacterCount) {
+      return a.score.chineseCharacterCount - b.score.chineseCharacterCount;
+    }
+
     return a.breakdown.lastSeen - b.breakdown.lastSeen;
   });
 }
@@ -148,7 +192,12 @@ function selectNewExercise(
     for (const word of orderedWordList) {
       if (!progress.words[word]) {
         // Find an exercise that contains this word
-        const candidates = getExerciseCandidates(word, exercises, progress);
+        const candidates = getExerciseCandidates(
+          word,
+          exercises,
+          progress,
+          orderedWordList
+        );
 
         if (candidates.length > 0) {
           return {
@@ -168,7 +217,12 @@ function selectNewExercise(
 
     if (newWords.length > 0) {
       // Re-score using the new logic to find the best candidate for this new word
-      const candidates = getExerciseCandidates(newWords[0], exercises, progress);
+      const candidates = getExerciseCandidates(
+        newWords[0],
+        exercises,
+        progress,
+        orderedWordList
+      );
       if (candidates.length > 0) {
         return {
           exercise: candidates[0].exercise,
