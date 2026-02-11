@@ -20,6 +20,7 @@ interface WordRow {
   progress: WordProgress | null;
   sentencesSeen: number;
   totalSentences: number;
+  unlockedSentences: number;
   status: "overdue" | "due-today" | "future" | "unseen";
 }
 
@@ -49,15 +50,18 @@ export function WordProgressContent({
   exercises,
   now,
 }: WordProgressContentProps) {
-  const { wordSentenceCounts, totalSentenceCounts } = useMemo(() => {
+  const { wordSentenceCounts, totalSentenceCounts, wordExerciseIndices } = useMemo(() => {
     const wordSeen = new Map<string, Set<number>>();
     const wordTotal = new Map<string, number>();
+    const wordExercises = new Map<string, number[]>();
 
     // Count total sentences per word from exercises
     for (let i = 0; i < exercises.length; i++) {
       const exerciseWords = getExerciseWords(exercises[i]);
       for (const w of exerciseWords) {
         wordTotal.set(w, (wordTotal.get(w) ?? 0) + 1);
+        if (!wordExercises.has(w)) wordExercises.set(w, []);
+        wordExercises.get(w)!.push(i);
       }
     }
 
@@ -74,6 +78,7 @@ export function WordProgressContent({
     return {
       wordSentenceCounts: wordSeen,
       totalSentenceCounts: wordTotal,
+      wordExerciseIndices: wordExercises,
     };
   }, [exercises, history]);
 
@@ -84,16 +89,29 @@ export function WordProgressContent({
       const totalSentences = totalSentenceCounts.get(word) ?? 0;
       const status = getWordStatus(progress, now);
 
+      // Count unlocked sentences: exercises where all other words have nextReview > now
+      const exerciseIndices = wordExerciseIndices.get(word) ?? [];
+      let unlockedSentences = 0;
+      for (const exIdx of exerciseIndices) {
+        const otherWords = getExerciseWords(exercises[exIdx]).filter((w) => w !== word);
+        const allOthersKnown = otherWords.every((w) => {
+          const wp = words[w];
+          return wp != null && wp.nextReview > now;
+        });
+        if (allOthersKnown) unlockedSentences++;
+      }
+
       return {
         index: idx + 1,
         word,
         progress,
         sentencesSeen,
         totalSentences,
+        unlockedSentences,
         status,
       };
     });
-  }, [wordList, words, wordSentenceCounts, totalSentenceCounts, now]);
+  }, [wordList, words, wordSentenceCounts, totalSentenceCounts, wordExerciseIndices, exercises, now]);
 
   const counts = useMemo(() => {
     const c = { overdue: 0, "due-today": 0, future: 0, unseen: 0 };
@@ -131,6 +149,7 @@ export function WordProgressContent({
               <th className="px-2 py-2">Last Seen</th>
               <th className="px-2 py-2">Review In</th>
               <th className="px-2 py-2 text-right">Seen</th>
+              <th className="px-2 py-2 text-right">Unlocked</th>
               <th className="px-2 py-2 text-right">Total</th>
             </tr>
           </thead>
@@ -162,6 +181,9 @@ export function WordProgressContent({
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
                   {row.progress ? row.sentencesSeen : ""}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
+                  {row.progress ? row.unlockedSentences : ""}
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
                   {row.progress ? row.totalSentences : ""}
