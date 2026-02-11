@@ -45,38 +45,46 @@ export function selectNextExercise(
   orderedWordList: string[] = []
 ): { exercise: Exercise; index: number; targetWord?: string } | null {
   const now = Date.now();
+  const allowedWords = new Set(orderedWordList);
 
-  // Find words that need review (nextReview is in the past)
+  // Find words that need review (nextReview is in the past), limited to
+  // the loaded ordered word list when it is provided.
   const wordsNeedingReview = Object.values(progress.words)
-    .filter((wp) => wp.nextReview <= now)
+    .filter((wp) => {
+      if (wp.nextReview > now) return false;
+      if (allowedWords.size === 0) return true;
+      return allowedWords.has(wp.word);
+    })
     .sort((a, b) => a.nextReview - b.nextReview); // sort by nearest review time
 
-  if (wordsNeedingReview.length > 0) {
-    // We have words to review - pick the most urgent one
-    const targetWord = wordsNeedingReview[0].word;
+  for (const reviewWord of wordsNeedingReview) {
+    const targetWord = reviewWord.word;
 
-    // Use the new helper to score candidates
+    // A review sentence is unlocked only when all other words are already known
+    // (present in progress and not currently due).
     const scoredExercises = getExerciseCandidates(
       targetWord,
       exercises,
       progress,
       orderedWordList
-    );
+    ).filter(({ exercise }) => {
+      const otherWords = getExerciseWords(exercise).filter((w) => w !== targetWord);
+      return otherWords.every((w) => {
+        const wp = progress.words[w];
+        return wp != null && wp.nextReview > now;
+      });
+    });
 
-    if (scoredExercises.length === 0) {
-      // This word is in progress but no exercises contain it?
-      // Fall back to new words or next in list
-      return selectNewExercise(exercises, progress, orderedWordList);
+    if (scoredExercises.length > 0) {
+      return {
+        exercise: scoredExercises[0].exercise,
+        index: scoredExercises[0].index,
+        targetWord,
+      };
     }
-
-    return {
-      exercise: scoredExercises[0].exercise,
-      index: scoredExercises[0].index,
-      targetWord,
-    };
   }
 
-  // No words need review - pick the next word in the HSK list that isn't mastered
+  // No teachable review words - pick the next word in the HSK list that isn't mastered
   return selectNewExercise(exercises, progress, orderedWordList);
 }
 
