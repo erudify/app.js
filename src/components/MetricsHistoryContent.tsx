@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { DailyMetricsPoint } from "@/lib/domain";
 import { sliceMetricsByRange, type MetricsRange } from "@/lib/progress-metrics";
 import { SimpleLineChart } from "@/components/SimpleLineChart";
+import { formatCompactNumber } from "@/lib/formatting";
 
 interface MetricsHistoryContentProps {
   history: Record<string, DailyMetricsPoint>;
@@ -58,6 +59,7 @@ export function MetricsHistoryContent({ history }: MetricsHistoryContentProps) {
       <SimpleLineChart
         title="Memory Strength (seconds)"
         points={memoryStrengthPoints}
+        valueFormatter={formatCompactNumber}
       />
 
       <div className="text-xs text-zinc-500 dark:text-zinc-400">
