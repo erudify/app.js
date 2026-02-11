@@ -21,6 +21,7 @@ interface SidebarProps {
   onClearProgress: () => void;
   onPomodoroStateChange: (state: PomodoroState) => void;
   onOpenMetricsHistory: () => void;
+  onOpenWordProgress: () => void;
 }
 
 export function Sidebar({
@@ -29,6 +30,7 @@ export function Sidebar({
   onClearProgress,
   onPomodoroStateChange,
   onOpenMetricsHistory,
+  onOpenWordProgress,
 }: SidebarProps) {
   return (
     <aside className="w-80 overflow-y-auto border-r border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
@@ -53,7 +55,14 @@ export function Sidebar({
 
       <div className="mt-8">
         <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Progress
+          <button
+            type="button"
+            onClick={onOpenWordProgress}
+            className="hover:text-red-600 dark:hover:text-red-400"
+            title="View detailed word progress"
+          >
+            Progress
+          </button>
         </h3>
         <div className="space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
           <div>
