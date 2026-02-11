@@ -164,7 +164,7 @@ export function WordProgressContent({
                   {row.progress ? row.sentencesSeen : ""}
                 </td>
                 <td className="px-2 py-1.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
-                  {row.totalSentences > 0 ? row.totalSentences : ""}
+                  {row.progress ? row.totalSentences : ""}
                 </td>
               </tr>
             ))}

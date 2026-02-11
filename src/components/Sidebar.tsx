@@ -59,6 +59,7 @@ export function Sidebar({
             type="button"
             onClick={onOpenWordProgress}
             className="hover:text-red-600 dark:hover:text-red-400"
+            title="View detailed word progress"
           >
             Progress
           </button>
