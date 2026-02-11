@@ -51,9 +51,23 @@ export function DebugModal({
                     Option #{cand.index}{" "}
                     {cand.index === currentIndex && " (Selected)"}
                   </span>
-                  <span className="rounded bg-zinc-100 px-2 py-0.5 text-sm font-mono font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                    Score: {cand.score}
-                  </span>
+                </div>
+                <div className="mb-3 rounded-lg bg-zinc-100 p-2 text-xs font-mono text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                  <div>
+                    1) Outside ordered list: {cand.score.wordsNotInOrderedList}
+                  </div>
+                  <div>
+                    2) Unknown/review words: {cand.score.unknownOrReviewWordCount}
+                  </div>
+                  <div>
+                    3) Largest ordered index:{" "}
+                    {cand.score.largestOrderedWordIndex === -1
+                      ? "none"
+                      : cand.score.largestOrderedWordIndex}
+                  </div>
+                  <div>
+                    4) Chinese chars: {cand.score.chineseCharacterCount}
+                  </div>
                 </div>
                 <div className="mb-3">
                   <div className="text-lg text-zinc-900 dark:text-white">
@@ -64,17 +78,21 @@ export function DebugModal({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  {Object.entries(cand.breakdown.wordScores).map(
-                    ([word, score]) => (
+                  {Object.entries(cand.breakdown.wordStatuses).map(
+                    ([word, status]) => (
                       <span
                         key={word}
                         className={`rounded-full px-2 py-0.5 ${
-                          score > 0
+                          status === "unknown"
                             ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                            : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : status === "review"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                         }`}
                       >
-                        {word}: {score}
+                        {word}: {status}
+                        {cand.breakdown.orderedWordIndices[word] !== null &&
+                          ` (idx ${cand.breakdown.orderedWordIndices[word]})`}
                       </span>
                     )
                   )}

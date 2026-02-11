@@ -12,10 +12,19 @@ export interface Exercise {
 export interface ScoredExercise {
   exercise: Exercise;
   index: number;
-  score: number;
+  score: {
+    wordsNotInOrderedList: number;
+    unknownOrReviewWordCount: number;
+    largestOrderedWordIndex: number;
+    chineseCharacterCount: number;
+  };
   breakdown: {
-    wordScores: Record<string, number>;
-    totalWordScore: number;
+    wordStatuses: Record<string, "known" | "review" | "unknown">;
+    orderedWordIndices: Record<string, number | null>;
+    wordsNotInOrderedList: number;
+    unknownOrReviewWordCount: number;
+    largestOrderedWordIndex: number;
+    chineseCharacterCount: number;
     lastSeen: number;
   };
 }

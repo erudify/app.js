@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { selectNextExercise } from "../lib/exercises";
+import { getExerciseCandidates, selectNextExercise } from "../lib/exercises";
 import type { Exercise, StudentProgress, ScoredExercise } from "../lib/domain";
 
 export interface UseExerciseSelectionReturn {
@@ -26,8 +26,8 @@ export function useExerciseSelection(
 
   const debugCandidates: ScoredExercise[] = useMemo(() => {
     if (!targetWord) return [];
-    return require("../lib/exercises").getExerciseCandidates(targetWord, exercises, progress);
-  }, [targetWord, exercises, progress]);
+    return getExerciseCandidates(targetWord, exercises, progress, wordList);
+  }, [targetWord, exercises, progress, wordList]);
 
   return { currentExercise, currentIndex, targetWord, debugCandidates };
 }
