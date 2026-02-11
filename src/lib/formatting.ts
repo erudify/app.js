@@ -34,6 +34,11 @@ export function formatMinutes(seconds: number): string {
   return `${minutes} min`;
 }
 
+/** Format a number concisely with 3 significant digits, using scientific notation for large values. */
+export function formatCompactNumber(value: number): string {
+  return value.toPrecision(3).replace("+", "");
+}
+
 export function normalizePinyin(pinyin: string): string {
   return pinyin.toLowerCase().replace(/\s+/g, "");
 }
