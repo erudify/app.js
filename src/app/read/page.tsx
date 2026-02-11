@@ -19,6 +19,7 @@ import { ExerciseDisplay } from "@/components/ExerciseDisplay";
 import { InstructionsPanel } from "@/components/InstructionsPanel";
 import { DebugModal } from "@/components/DebugModal";
 import { MetricsHistoryModal } from "@/components/MetricsHistoryModal";
+import { WordProgressModal } from "@/components/WordProgressModal";
 import { upsertTodayAndFillMissingDays } from "@/lib/progress-metrics";
 import type { PomodoroState } from "@/components/PomodoroTimer";
 
@@ -29,6 +30,7 @@ export default function ReadPage() {
   const [showCompletion, setShowCompletion] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [showMetricsHistory, setShowMetricsHistory] = useState(false);
+  const [showWordProgress, setShowWordProgress] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [pomodoroState, setPomodoroState] = useState<PomodoroState>({
     isRunning: false,
@@ -229,6 +231,7 @@ export default function ReadPage() {
         onClearProgress={handleClearProgress}
         onPomodoroStateChange={setPomodoroState}
         onOpenMetricsHistory={() => setShowMetricsHistory(true)}
+        onOpenWordProgress={() => setShowWordProgress(true)}
       />
 
       <main className="flex-1 p-8">
@@ -321,6 +324,16 @@ export default function ReadPage() {
         show={showMetricsHistory}
         onClose={() => setShowMetricsHistory(false)}
         history={progress.dailyMetricsHistory}
+      />
+
+      <WordProgressModal
+        show={showWordProgress}
+        onClose={() => setShowWordProgress(false)}
+        wordList={wordList}
+        words={progress.words}
+        history={progress.history}
+        exercises={exercises}
+        now={currentTime}
       />
     </div>
   );
