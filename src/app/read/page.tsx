@@ -53,7 +53,8 @@ export default function ReadPage() {
   }, [displayedExerciseIndex, currentExercise, currentIndex]);
 
   const stats = useMemo(() => {
-    const wordEntries = Object.values(progress.words);
+    const wordListSet = new Set(wordList);
+    const wordEntries = Object.values(progress.words).filter((w) => wordListSet.has(w.word));
 
     const knownCount = wordEntries.filter((w) => w.nextReview > currentTime).length;
     const reviewCount = wordEntries.filter((w) => w.nextReview <= currentTime).length;
