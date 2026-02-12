@@ -60,13 +60,16 @@ export function DebugModal({
                     2) Unknown/review words: {cand.score.unknownOrReviewWordCount}
                   </div>
                   <div>
-                    3) Largest ordered index:{" "}
+                    3) Has been seen: {cand.score.hasBeenSeen}
+                  </div>
+                  <div>
+                    4) Largest ordered index:{" "}
                     {cand.score.largestOrderedWordIndex === -1
                       ? "none"
                       : cand.score.largestOrderedWordIndex}
                   </div>
                   <div>
-                    4) Chinese chars: {cand.score.chineseCharacterCount}
+                    5) Chinese chars: {cand.score.chineseCharacterCount}
                   </div>
                 </div>
                 <div className="mb-3">

@@ -142,6 +142,7 @@ export function getExerciseCandidates(
     const chineseCharacterCount =
       sentence.match(/\p{Script=Han}/gu)?.length ?? 0;
     const lastSeen = progress.exerciseLastSeen[index] || 0;
+    const hasBeenSeen = lastSeen > 0 ? 1 : 0;
 
     return {
       exercise,
@@ -149,6 +150,7 @@ export function getExerciseCandidates(
       score: {
         wordsNotInOrderedList,
         unknownOrReviewWordCount,
+        hasBeenSeen,
         largestOrderedWordIndex,
         chineseCharacterCount,
       },
@@ -172,6 +174,10 @@ export function getExerciseCandidates(
 
     if (a.score.unknownOrReviewWordCount !== b.score.unknownOrReviewWordCount) {
       return a.score.unknownOrReviewWordCount - b.score.unknownOrReviewWordCount;
+    }
+
+    if (a.score.hasBeenSeen !== b.score.hasBeenSeen) {
+      return a.score.hasBeenSeen - b.score.hasBeenSeen;
     }
 
     if (a.score.largestOrderedWordIndex !== b.score.largestOrderedWordIndex) {

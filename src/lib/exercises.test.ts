@@ -154,6 +154,7 @@ describe("getExerciseCandidates", () => {
     expect(candidates[0].score).toEqual({
       wordsNotInOrderedList: 0,
       unknownOrReviewWordCount: 2,
+      hasBeenSeen: 0,
       largestOrderedWordIndex: 1,
       chineseCharacterCount: 2,
     });
@@ -214,10 +215,28 @@ describe("getExerciseCandidates", () => {
     expect(candidates[0].score).toEqual({
       wordsNotInOrderedList: 0,
       unknownOrReviewWordCount: 1,
+      hasBeenSeen: 0,
       largestOrderedWordIndex: 0,
       chineseCharacterCount: 1,
     });
 
     vi.useRealTimers();
+  });
+
+  it("prefers unseen exercises over seen exercises before considering word index", () => {
+    const exercises: Exercise[] = [
+      makeExercise(["我", "的"]),    // index 0 — seen, lower word index
+      makeExercise(["你们", "的"]),  // index 1 — unseen, higher word index
+    ];
+    const progress = makeProgress({}, { 0: 1000 });
+    const orderedWordList = ["的", "我", "你们"];
+
+    const candidates = getExerciseCandidates("的", exercises, progress, orderedWordList);
+
+    // Unseen exercise (index 1) should come first despite having a higher word index
+    expect(candidates[0].index).toBe(1);
+    expect(candidates[0].score.hasBeenSeen).toBe(0);
+    expect(candidates[1].index).toBe(0);
+    expect(candidates[1].score.hasBeenSeen).toBe(1);
   });
 });

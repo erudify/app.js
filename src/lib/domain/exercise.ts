@@ -15,6 +15,7 @@ export interface ScoredExercise {
   score: {
     wordsNotInOrderedList: number;
     unknownOrReviewWordCount: number;
+    hasBeenSeen: number;
     largestOrderedWordIndex: number;
     chineseCharacterCount: number;
   };
